@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  INTERNAL
+  EXTERNAL
+  TEAM
+}
+
+enum HourStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hourEntries      HourEntry[]
+  magicLinks       MagicLink[]
+  sessions         Session[]
+  invoices         Invoice[]
+  budgetAllocations BudgetAllocation[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model MagicLink {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model WorkPackage {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  name        String
+  activities  Activity[]
+  hourEntries HourEntry[]
+  invoices    Invoice[]
+  createdAt   DateTime   @default(now())
+}
+
+model Activity {
+  id            String      @id @default(cuid())
+  code          String      @unique
+  name          String
+  workPackageId String
+  workPackage   WorkPackage  @relation(fields: [workPackageId], references: [id])
+  hourEntries   HourEntry[]
+  createdAt     DateTime    @default(now())
+}
+
+model HourEntry {
+  id            String     @id @default(cuid())
+  date          DateTime
+  hours         Float
+  description   String
+  status        HourStatus @default(DRAFT)
+  userId        String
+  workPackageId String
+  activityId    String
+  therapistId   String?
+  approvedAt    DateTime?
+  approvedBy    String?
+  // IMMUTABLE - critical for RVO audit
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id])
+  workPackage WorkPackage @relation(fields: [workPackageId], references: [id])
+  activity    Activity    @relation(fields: [activityId], references: [id])
+  therapist   Therapist?  @relation(fields: [therapistId], references: [id])
+
+  @@index([userId])
+  @@index([therapistId])
+  @@index([status])
+  @@index([workPackageId])
+}
+
+model Invoice {
+  id            String    @id @default(cuid())
+  date          DateTime
+  supplier      String
+  invoiceNumber String
+  description   String
+  amountExVat   Float
+  vatAmount     Float
+  amountIncVat  Float
+  paymentDate   DateTime?
+  filePath      String?
+  fileName      String?
+  fileData      String?   @db.Text
+  fileMime      String?
+  workPackageId String
+  uploadedById  String
+  // IMMUTABLE
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workPackage WorkPackage @relation(fields: [workPackageId], references: [id])
+  uploadedBy  User       @relation(fields: [uploadedById], references: [id])
+
+  @@index([workPackageId])
+}
+
+model Training {
+  id        String              @id @default(cuid())
+  name      String
+  date      DateTime
+  hours     Float
+  topic     String
+  notes     String?
+  attendees TrainingAttendee[]
+  // IMMUTABLE
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+}
+
+model TrainingAttendee {
+  id         String   @id @default(cuid())
+  trainingId String
+  name       String
+  present    Boolean  @default(false)
+  signature  String?
+  createdAt  DateTime @default(now())
+
+  training Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, name])
+}
+
+model Therapist {
+  id         String      @id @default(cuid())
+  name       String
+  hourlyRate Float?
+  active     Boolean     @default(true)
+  hourEntries HourEntry[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Client {
+  id           String    @id @default(cuid())
+  clientCode   String    @unique
+  toolUsed     String
+  startDate    DateTime
+  endDate      DateTime?
+  notes        String?
+  // IMMUTABLE
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model BudgetAllocation {
+  id           String  @id @default(cuid())
+  userId       String?
+  category     String
+  budgetHours  Float
+  hourlyRate   Float
+  description  String?
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
