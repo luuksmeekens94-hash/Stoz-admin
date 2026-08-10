@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Papa from "papaparse";
 import { getSession } from "@/lib/auth";
 import { sanitizeCsvRows } from "@/lib/csv-export";
-import { hasValidInvoiceAmounts, hasValidInvoiceEvidence } from "@/lib/financial-steering";
-import { PROJECT_STEERING_CONFIG } from "@/lib/project-plan";
+import { hasValidInvoiceAmounts, hasValidInvoiceBudgetLineMapping, hasValidInvoiceEvidence } from "@/lib/financial-steering";
+import { APPROVED_BUDGET_LINES, PROJECT_STEERING_CONFIG } from "@/lib/project-plan";
 import { prisma } from "@/lib/prisma";
 import { amsterdamDateKey, reportCutoffEnd, resolveReportExportAsOf } from "@/lib/reporting-control";
 
@@ -106,8 +106,12 @@ export async function GET(request: NextRequest) {
         amountIncVat: invoice.amountIncVat,
         hasEvidence,
       });
+      const validMapping = hasValidInvoiceBudgetLineMapping(
+        { ...invoice, hasEvidence, workPackageCode: invoice.workPackage.code },
+        APPROVED_BUDGET_LINES,
+      );
       const financiallyReportable = Boolean(
-        invoice.confirmedBudgetLineId &&
+        validMapping &&
           hasEvidence &&
           validAmounts &&
           invoice.vatTreatment !== "PENDING",
@@ -123,7 +127,7 @@ export async function GET(request: NextRequest) {
         BTW: invoice.vatAmount,
         "Bedrag incl. btw": invoice.amountIncVat,
         Bedragcontrole: validAmounts ? "Geldig" : "Geblokkeerd: bedragen inconsistent",
-        Begrotingsregel: invoice.confirmedBudgetLineId || "Niet bevestigd",
+        Begrotingsregel: validMapping ? invoice.confirmedBudgetLineId : "Niet geldig bevestigd",
         Btwbehandeling: invoice.vatTreatment,
         Bewijs: hasEvidence ? "Aanwezig" : "Ontbreekt",
         Rapportagestatus: financiallyReportable

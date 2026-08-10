@@ -1,7 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { validateInvoiceClassification } from "@/lib/invoice-classification";
+import { buildUnclassifiedInvoiceDeleteWhere, isClassifiedInvoiceImmutable, validateInvoiceClassification } from "@/lib/invoice-classification";
 
 describe("invoice classification", () => {
+  it("maakt iedere factuur met een classificatiespoor immutable", () => {
+    expect(isClassifiedInvoiceImmutable({ confirmedBudgetLineId: "external", classifiedAt: null, classifiedById: null })).toBe(true);
+    expect(isClassifiedInvoiceImmutable({ confirmedBudgetLineId: null, classifiedAt: new Date(), classifiedById: "admin" })).toBe(true);
+    expect(isClassifiedInvoiceImmutable({ confirmedBudgetLineId: null, classifiedAt: null, classifiedById: null })).toBe(false);
+    expect(isClassifiedInvoiceImmutable({ classificationReason: "auditreden", vatTreatment: "PENDING" })).toBe(true);
+    expect(isClassifiedInvoiceImmutable({ classificationReason: null, vatTreatment: "EXCLUDED" })).toBe(true);
+  });
+
+  it("bouwt een atomische deletevoorwaarde op de volledige ongeclassificeerde snapshot", () => {
+    const updatedAt = new Date("2026-08-10T10:00:00.000Z");
+    expect(buildUnclassifiedInvoiceDeleteWhere({ id: "invoice-1", updatedAt })).toEqual({
+      id: "invoice-1",
+      updatedAt,
+      confirmedBudgetLineId: null,
+      classificationReason: null,
+      classifiedAt: null,
+      classifiedById: null,
+      vatTreatment: "PENDING",
+    });
+  });
   it("accepteert een expliciete externe factuurkoppeling met concrete reden", () => {
     expect(
       validateInvoiceClassification({

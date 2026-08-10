@@ -14,3 +14,10 @@ export function resolveAppBaseUrl(input: {
   }
   return url.origin;
 }
+
+export function isSessionRecordUsable(
+  session: { expiresAt: Date; userActive: boolean },
+  now = new Date(),
+) {
+  return session.userActive && session.expiresAt > now;
+}

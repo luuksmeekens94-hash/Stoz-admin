@@ -36,16 +36,49 @@ npm install
 cp .env.example .env
 # Pas DATABASE_URL aan naar je PostgreSQL database
 
-# Prisma Client genereren en gecontroleerde migraties toepassen
+# Prisma Client genereren
 npx prisma generate
+```
+
+Kies daarna **exact één** van de onderstaande databasepaden.
+
+#### Nieuwe database of database met bestaande Prisma-migratiehistorie
+
+Gebruik dit pad alleen voor een lege database of wanneer `_prisma_migrations` de bestaande migratiehistorie al correct bevat.
+
+```bash
 npx prisma migrate deploy
-
-# Seed data laden (gebruikers, werkpakketten, budgetten)
+npx prisma migrate status
+# Alleen voor een nieuwe/lege omgeving: seed data laden
 npm run db:seed
+```
 
-# Development server starten
+#### Eenmalige baseline voor een bestaande database zonder migratiehistorie
+
+`20260809000000_baseline_existing_schema` beschrijft het schema dat al bestond vóór Prisma-migratiebeheer. Voer **geen** `prisma migrate deploy` uit voordat onderstaande baselinecontrole en registratie zijn afgerond; anders probeert Prisma bestaande tabellen opnieuw aan te maken.
+
+1. Maak een databaseback-up.
+2. Bevestig dat `_prisma_migrations` ontbreekt en vergelijk een schema-only dump van de bestaande database handmatig met `prisma/migrations/20260809000000_baseline_existing_schema/migration.sql`. Stop bij ieder verschil; `migrate resolve` repareert geen schema.
+3. Markeer uitsluitend na die controle de baseline eenmalig als toegepast.
+4. Pas daarna de geregistreerde vervolgmigraties toe en verifieer de live schemadiff.
+
+```bash
+npx prisma migrate resolve --applied 20260809000000_baseline_existing_schema
+npx prisma migrate deploy
+npx prisma migrate status
+npx prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma \
+  --exit-code
+```
+
+Start daarna de applicatie:
+
+```bash
 npm run dev
 ```
+
+Gebruik nooit `prisma db push` op productie.
 
 ### 3. Inloggen
 

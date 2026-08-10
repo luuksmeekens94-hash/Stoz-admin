@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import DeleteInvoiceButton from "@/components/DeleteInvoiceButton";
+import { isClassifiedInvoiceImmutable } from "@/lib/invoice-classification";
 
 export default async function FacturenPage() {
   const session = await getSession();
@@ -85,7 +86,11 @@ export default async function FacturenPage() {
                       )}
                     </td>
                     <td className="py-2 px-3 text-center">
-                      <DeleteInvoiceButton invoiceId={inv.id} />
+                      {isClassifiedInvoiceImmutable(inv) ? (
+                        <span className="text-xs font-semibold text-gray-500">Auditspoor vergrendeld</span>
+                      ) : (
+                        <DeleteInvoiceButton invoiceId={inv.id} />
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -111,6 +111,10 @@ export function comparePlanActual(
     .sort((a, b) => planActualKey(a).localeCompare(planActualKey(b), "nl"));
 }
 
+export function findActualOnlyComparisons(rows: PlanActualComparison[]) {
+  return rows.filter((row) => row.plannedHours === 0 && row.actualHours > 0);
+}
+
 const PLAN_MONTH_KEYS = [
   "2026-08",
   "2026-09",

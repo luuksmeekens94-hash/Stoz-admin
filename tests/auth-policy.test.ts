@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { resolveAppBaseUrl } from "@/lib/auth-policy";
+import { isSessionRecordUsable, resolveAppBaseUrl } from "@/lib/auth-policy";
 import { hashAuthToken } from "@/lib/auth-token";
 
 describe("auth policy", () => {
+  it("weigert een niet-verlopen sessie zodra de gebruiker inactief is", () => {
+    const now = new Date("2026-08-10T12:00:00.000Z");
+    expect(isSessionRecordUsable({ expiresAt: new Date("2026-08-11T12:00:00.000Z"), userActive: false }, now)).toBe(false);
+    expect(isSessionRecordUsable({ expiresAt: new Date("2026-08-11T12:00:00.000Z"), userActive: true }, now)).toBe(true);
+  });
 
   it("slaat magic-linktokens uitsluitend als een vaste SHA-256-hash op", () => {
     const token = "test-token-dat-nooit-in-de-database-mag-staan";

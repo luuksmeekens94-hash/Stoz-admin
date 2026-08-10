@@ -125,6 +125,21 @@ export function hasValidInvoiceAmounts(invoice: FinancialInvoice): boolean {
   );
 }
 
+export function hasValidInvoiceBudgetLineMapping(
+  invoice: FinancialInvoice,
+  budgetLines: FinancialBudgetLine[],
+) {
+  if (!invoice.confirmedBudgetLineId) return false;
+  const line = budgetLines.find(
+    (candidate) =>
+      candidate.id === invoice.confirmedBudgetLineId &&
+      (candidate.costType === "EXTERNAL_LABOUR" || candidate.costType === "OTHER"),
+  );
+  if (!line) return false;
+  const eligible = line.eligibleWorkPackageCodes || [];
+  return eligible.length === 0 || Boolean(invoice.workPackageCode && eligible.includes(invoice.workPackageCode));
+}
+
 function isReportableInvoice(invoice: FinancialInvoice): boolean {
   return invoice.hasEvidence && hasValidInvoiceAmounts(invoice);
 }
@@ -176,7 +191,9 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
       input.invoices
         .filter(
           (invoice) =>
-            invoice.confirmedBudgetLineId === line.id && isReportableInvoice(invoice),
+            invoice.confirmedBudgetLineId === line.id &&
+            hasValidInvoiceBudgetLineMapping(invoice, input.budgetLines) &&
+            isReportableInvoice(invoice),
         )
         .reduce((sum, invoice) => sum + reportableInvoiceAmount(invoice), 0),
     );
@@ -292,7 +309,9 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
   const confirmedInvoiceEuros = euros(
     input.invoices
       .filter(
-        (invoice) => Boolean(invoice.confirmedBudgetLineId) && isReportableInvoice(invoice),
+        (invoice) =>
+          hasValidInvoiceBudgetLineMapping(invoice, input.budgetLines) &&
+          isReportableInvoice(invoice),
       )
       .reduce((sum, invoice) => sum + reportableInvoiceAmount(invoice), 0),
   );
@@ -312,7 +331,9 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
     input.invoices
       .filter(
         (invoice) =>
-          !invoice.confirmedBudgetLineId && !invoice.suggestedBudgetLineId,
+          (!invoice.confirmedBudgetLineId && !invoice.suggestedBudgetLineId) ||
+          (Boolean(invoice.confirmedBudgetLineId) &&
+            !hasValidInvoiceBudgetLineMapping(invoice, input.budgetLines)),
       )
       .reduce(
         (sum, invoice) =>
@@ -329,7 +350,7 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
     input.invoices
       .filter(
         (invoice) =>
-          Boolean(invoice.confirmedBudgetLineId) &&
+          hasValidInvoiceBudgetLineMapping(invoice, input.budgetLines) &&
           isReportableInvoice(invoice) &&
           invoice.vatTreatment === "PENDING" &&
           (invoice.vatAmount || 0) > 0,

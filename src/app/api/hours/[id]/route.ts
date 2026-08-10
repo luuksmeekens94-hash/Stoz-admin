@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { buildApprovedHourCorrection } from "@/lib/hour-corrections";
+import { assertHourEntryCasUpdated, buildHourEntryCasWhere, HourEntryConcurrencyError } from "@/lib/hour-entry-concurrency";
 import {
   HourInputError,
   parseHourInput,
@@ -28,6 +29,13 @@ async function validateExistingEntry(entry: {
     workPackageId: entry.workPackageId,
     activityWorkPackageId: activity.workPackageId,
   });
+}
+
+function staleHourEntryResponse() {
+  return NextResponse.json(
+    { error: "De urenregistratie is gelijktijdig gewijzigd. Vernieuw de pagina en probeer opnieuw." },
+    { status: 409 },
+  );
 }
 
 export async function PATCH(
@@ -91,6 +99,19 @@ export async function PATCH(
       }
 
       const updated = await prisma.$transaction(async (tx) => {
+        const mutation = await tx.hourEntry.updateMany({
+          where: buildHourEntryCasWhere(entry),
+          data: {
+            date: new Date(`${correction.after.date}T00:00:00.000Z`),
+            hours: correction.after.hours,
+            description: correction.after.description,
+            workPackageId: correction.after.workPackageId,
+            activityId: correction.after.activityId,
+            therapistId: correction.after.therapistId,
+          },
+        });
+        assertHourEntryCasUpdated(mutation.count);
+
         await tx.auditEvent.create({
           data: {
             entityType: "HourEntry",
@@ -103,16 +124,8 @@ export async function PATCH(
           },
         });
 
-        return tx.hourEntry.update({
+        return tx.hourEntry.findUniqueOrThrow({
           where: { id },
-          data: {
-            date: new Date(`${correction.after.date}T00:00:00.000Z`),
-            hours: correction.after.hours,
-            description: correction.after.description,
-            workPackageId: correction.after.workPackageId,
-            activityId: correction.after.activityId,
-            therapistId: correction.after.therapistId,
-          },
           include: { user: true, workPackage: true, activity: true, therapist: true },
         });
       });
@@ -120,7 +133,10 @@ export async function PATCH(
       return NextResponse.json({ entry: updated, correction });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Correctie mislukt";
-      return NextResponse.json({ error: message }, { status: 400 });
+      return NextResponse.json(
+        { error: message },
+        { status: error instanceof HourEntryConcurrencyError ? 409 : 400 },
+      );
     }
   }
 
@@ -133,10 +149,12 @@ export async function PATCH(
         const message = error instanceof Error ? error.message : "Indienen geblokkeerd";
         return NextResponse.json({ error: message }, { status: 409 });
       }
-      const updated = await prisma.hourEntry.update({
-        where: { id },
+      const mutation = await prisma.hourEntry.updateMany({
+        where: buildHourEntryCasWhere(entry),
         data: { status: "SUBMITTED" },
       });
+      if (mutation.count !== 1) return staleHourEntryResponse();
+      const updated = await prisma.hourEntry.findUniqueOrThrow({ where: { id } });
       return NextResponse.json(updated);
     }
 
@@ -147,22 +165,26 @@ export async function PATCH(
         const message = error instanceof Error ? error.message : "Goedkeuren geblokkeerd";
         return NextResponse.json({ error: message }, { status: 409 });
       }
-      const updated = await prisma.hourEntry.update({
-        where: { id },
+      const mutation = await prisma.hourEntry.updateMany({
+        where: buildHourEntryCasWhere(entry),
         data: {
           status: "APPROVED",
           approvedAt: new Date(),
           approvedBy: session.user.id,
         },
       });
+      if (mutation.count !== 1) return staleHourEntryResponse();
+      const updated = await prisma.hourEntry.findUniqueOrThrow({ where: { id } });
       return NextResponse.json(updated);
     }
 
     if (body.status === "DRAFT" && isAdmin && entry.status === "SUBMITTED") {
-      const updated = await prisma.hourEntry.update({
-        where: { id },
+      const mutation = await prisma.hourEntry.updateMany({
+        where: buildHourEntryCasWhere(entry),
         data: { status: "DRAFT" },
       });
+      if (mutation.count !== 1) return staleHourEntryResponse();
+      const updated = await prisma.hourEntry.findUniqueOrThrow({ where: { id } });
       return NextResponse.json(updated);
     }
 
@@ -214,8 +236,8 @@ export async function PATCH(
       if (!therapist) throw new HourInputError("Therapeut niet gevonden of niet actief.");
     }
 
-    const updated = await prisma.hourEntry.update({
-      where: { id },
+    const mutation = await prisma.hourEntry.updateMany({
+      where: buildHourEntryCasWhere(entry),
       data: {
         date: parsedDate.date,
         hours,
@@ -224,6 +246,10 @@ export async function PATCH(
         activityId,
         therapistId,
       },
+    });
+    if (mutation.count !== 1) return staleHourEntryResponse();
+    const updated = await prisma.hourEntry.findUniqueOrThrow({
+      where: { id },
       include: { user: true, workPackage: true, activity: true, therapist: true },
     });
 
@@ -257,6 +283,9 @@ export async function DELETE(
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
-  await prisma.hourEntry.delete({ where: { id } });
+  const deletion = await prisma.hourEntry.deleteMany({
+    where: buildHourEntryCasWhere(entry),
+  });
+  if (deletion.count !== 1) return staleHourEntryResponse();
   return NextResponse.json({ ok: true });
 }

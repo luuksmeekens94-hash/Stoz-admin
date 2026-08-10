@@ -8,6 +8,34 @@ const ALLOWED_VAT_TREATMENTS = new Set<InvoiceVatTreatmentInput>([
   "INCLUDED_CONFIRMED",
 ]);
 
+export function isClassifiedInvoiceImmutable(input: {
+  confirmedBudgetLineId?: string | null;
+  classificationReason?: string | null;
+  classifiedAt?: Date | null;
+  classifiedById?: string | null;
+  vatTreatment?: InvoiceVatTreatmentInput | null;
+}) {
+  return Boolean(
+    input.confirmedBudgetLineId ||
+      input.classificationReason ||
+      input.classifiedAt ||
+      input.classifiedById ||
+      (input.vatTreatment && input.vatTreatment !== "PENDING"),
+  );
+}
+
+export function buildUnclassifiedInvoiceDeleteWhere(input: { id: string; updatedAt: Date }) {
+  return {
+    id: input.id,
+    updatedAt: input.updatedAt,
+    confirmedBudgetLineId: null,
+    classificationReason: null,
+    classifiedAt: null,
+    classifiedById: null,
+    vatTreatment: "PENDING" as const,
+  };
+}
+
 export function validateInvoiceClassification(input: {
   budgetLineId: unknown;
   workPackageCode: string;

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { prisma } from "./prisma";
 import { randomUUID } from "node:crypto";
 import { hashAuthToken } from "./auth-token";
+import { isSessionRecordUsable } from "./auth-policy";
 
 const SESSION_COOKIE = "stoz_session";
 const SESSION_EXPIRY_HOURS = 72;
@@ -38,7 +39,11 @@ export async function getSession() {
     include: { user: true },
   });
 
-  if (!session || session.expiresAt < new Date()) return null;
+  if (!session) return null;
+  if (!isSessionRecordUsable({ expiresAt: session.expiresAt, userActive: session.user.active })) {
+    await prisma.session.deleteMany({ where: { id: session.id } }).catch(() => undefined);
+    return null;
+  }
 
   return session;
 }

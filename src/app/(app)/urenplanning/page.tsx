@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import {
   buildCorrectiveMonthlyPlan,
   comparePlanActual,
+  findActualOnlyComparisons,
   resolvePlanActualRoleCategory,
   spreadPlannedHoursAcrossDates,
   type MonthlyPlanSuggestion,
@@ -112,6 +113,9 @@ export default async function HoursPlanningPage() {
   for (const row of rows) {
     rowsByMonth.set(row.monthKey, [...(rowsByMonth.get(row.monthKey) ?? []), row]);
   }
+  const displayMonthKeys = Array.from(
+    new Set([...Array.from(rowsByMonth.keys()), ...planActual.map((row) => row.monthKey)]),
+  ).sort();
 
   const approvedForecastHours = rows
     .filter((row) => row.sourceState === "APPROVED_REMAINING")
@@ -165,7 +169,8 @@ export default async function HoursPlanningPage() {
       </section>
 
       <section className="space-y-6">
-        {Array.from(rowsByMonth.entries()).map(([key, monthRows]) => {
+        {displayMonthKeys.map((key) => {
+          const monthRows = rowsByMonth.get(key) || [];
           const monthTotal = monthRows
             .filter((row) => row.sourceState === "APPROVED_REMAINING")
             .reduce((sum, row) => sum + row.plannedHours, 0);
@@ -174,6 +179,7 @@ export default async function HoursPlanningPage() {
           const dimensionalMismatchCount = monthComparisons.filter(
             (row) => Math.abs(row.varianceHours) > 0.01,
           ).length;
+          const actualOnlyRows = findActualOnlyComparisons(monthComparisons);
           const control = buildMonthlyControl({
             monthKey: key,
             currentMonth,
@@ -289,6 +295,27 @@ export default async function HoursPlanningPage() {
                     </div>
                   );
                 })}
+                {actualOnlyRows.map((comparison) => (
+                  <div
+                    key={`actual-only-${comparison.roleCategory}-${comparison.workPackageCode}-${comparison.activityCode}`}
+                    className="border-l-4 border-amber-500 bg-amber-50 p-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold text-amber-950">
+                          Ongeplande realisatie · {comparison.roleCategory}
+                        </h3>
+                        <p className="mt-1 text-sm text-amber-900">
+                          {comparison.workPackageCode}/{comparison.activityCode} heeft goedgekeurde uren maar geen forecastregel op dezelfde rol/WP/activiteit-combinatie.
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold text-amber-950">{formatHours(comparison.actualHours)} u werkelijk</p>
+                        <p className="text-xs text-amber-800">forecast 0 u · afwijking +{formatHours(comparison.varianceHours)} u</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </article>
           );

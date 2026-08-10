@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { validateHourEntryDraft } from "@/lib/hour-entry-validation";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import {
+  assertHourEntryCasUpdated,
+  buildHourEntryBulkCasWhere,
+  HourEntryConcurrencyError,
+} from "@/lib/hour-entry-concurrency";
+
+function bulkMutationErrorResponse(error: unknown) {
+  const isTransactionConflict =
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+  const status = error instanceof HourEntryConcurrencyError || isTransactionConflict ? 409 : 400;
+  const message = error instanceof Error ? error.message : "Bulkmutatie mislukt";
+  return NextResponse.json({ error: message }, { status });
+}
 
 export async function PATCH(request: NextRequest) {
   const session = await getSession();
@@ -21,55 +35,77 @@ export async function PATCH(request: NextRequest) {
   const now = new Date();
 
   if (action === "submit") {
-    const result = await prisma.$transaction(async (tx) => {
-      const entries = await tx.hourEntry.findMany({
-        where: {
-          id: { in: ids },
-          ...(isAdmin ? {} : { userId: session.user.id }),
-          status: "DRAFT",
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const entries = await tx.hourEntry.findMany({
+            where: {
+              id: { in: ids },
+              ...(isAdmin ? {} : { userId: session.user.id }),
+              status: "DRAFT",
+            },
+            include: { activity: { select: { workPackageId: true } } },
+          });
+          if (entries.length !== ids.length) {
+            throw new Error("Niet alle geselecteerde concepten zijn indienbaar.");
+          }
+          for (const entry of entries) {
+            validateHourEntryDraft({
+              dateKey: entry.date.toISOString().slice(0, 10),
+              now,
+              hours: entry.hours,
+              workPackageId: entry.workPackageId,
+              activityWorkPackageId: entry.activity.workPackageId,
+            });
+          }
+          const mutation = await tx.hourEntry.updateMany({
+            where: buildHourEntryBulkCasWhere(entries),
+            data: { status: "SUBMITTED" },
+          });
+          assertHourEntryCasUpdated(mutation.count, entries.length);
+          return mutation;
         },
-        include: { activity: { select: { workPackageId: true } } },
-      });
-      if (entries.length !== ids.length) throw new Error("Niet alle geselecteerde concepten zijn indienbaar.");
-      for (const entry of entries) {
-        validateHourEntryDraft({
-          dateKey: entry.date.toISOString().slice(0, 10),
-          now,
-          hours: entry.hours,
-          workPackageId: entry.workPackageId,
-          activityWorkPackageId: entry.activity.workPackageId,
-        });
-      }
-      return tx.hourEntry.updateMany({
-        where: { id: { in: ids }, status: "DRAFT" },
-        data: { status: "SUBMITTED" },
-      });
-    }, { isolationLevel: "Serializable" });
-    return NextResponse.json({ ok: true, count: result.count });
+        { isolationLevel: "Serializable" },
+      );
+      return NextResponse.json({ ok: true, count: result.count });
+    } catch (error) {
+      return bulkMutationErrorResponse(error);
+    }
   }
 
   if (action === "approve" && isAdmin) {
-    const result = await prisma.$transaction(async (tx) => {
-      const entries = await tx.hourEntry.findMany({
-        where: { id: { in: ids }, status: "SUBMITTED" },
-        include: { activity: { select: { workPackageId: true } } },
-      });
-      if (entries.length !== ids.length) throw new Error("Niet alle geselecteerde regels zijn goed te keuren.");
-      for (const entry of entries) {
-        validateHourEntryDraft({
-          dateKey: entry.date.toISOString().slice(0, 10),
-          now,
-          hours: entry.hours,
-          workPackageId: entry.workPackageId,
-          activityWorkPackageId: entry.activity.workPackageId,
-        });
-      }
-      return tx.hourEntry.updateMany({
-        where: { id: { in: ids }, status: "SUBMITTED" },
-        data: { status: "APPROVED", approvedAt: now, approvedBy: session.user.id },
-      });
-    }, { isolationLevel: "Serializable" });
-    return NextResponse.json({ ok: true, count: result.count });
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const entries = await tx.hourEntry.findMany({
+            where: { id: { in: ids }, status: "SUBMITTED" },
+            include: { activity: { select: { workPackageId: true } } },
+          });
+          if (entries.length !== ids.length) {
+            throw new Error("Niet alle geselecteerde regels zijn goed te keuren.");
+          }
+          for (const entry of entries) {
+            validateHourEntryDraft({
+              dateKey: entry.date.toISOString().slice(0, 10),
+              now,
+              hours: entry.hours,
+              workPackageId: entry.workPackageId,
+              activityWorkPackageId: entry.activity.workPackageId,
+            });
+          }
+          const mutation = await tx.hourEntry.updateMany({
+            where: buildHourEntryBulkCasWhere(entries),
+            data: { status: "APPROVED", approvedAt: now, approvedBy: session.user.id },
+          });
+          assertHourEntryCasUpdated(mutation.count, entries.length);
+          return mutation;
+        },
+        { isolationLevel: "Serializable" },
+      );
+      return NextResponse.json({ ok: true, count: result.count });
+    } catch (error) {
+      return bulkMutationErrorResponse(error);
+    }
   }
 
   return NextResponse.json({ error: "Ongeldige actie" }, { status: 403 });

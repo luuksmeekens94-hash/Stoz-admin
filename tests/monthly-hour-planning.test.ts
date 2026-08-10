@@ -3,12 +3,21 @@ import {
   assertAutomaticPlanningCreationAllowed,
   buildCorrectiveMonthlyPlan,
   comparePlanActual,
+  findActualOnlyComparisons,
   findMonthlyPlan,
   resolvePlanActualRoleCategory,
   spreadPlannedHoursAcrossDates,
 } from "@/lib/monthly-hour-planning";
 
 describe("buildCorrectiveMonthlyPlan", () => {
+  it("houdt actual-only dimensies expliciet zichtbaar voor de detailweergave", () => {
+    const comparison = comparePlanActual([], [
+      { monthKey: "2026-08", roleCategory: "Extern adviseur", workPackageCode: "WP2", activityCode: "A2.1", actualHours: 4 },
+    ]);
+    expect(findActualOnlyComparisons(comparison)).toEqual([
+      expect.objectContaining({ monthKey: "2026-08", plannedHours: 0, actualHours: 4 }),
+    ]);
+  });
   it("splitst de broncategorie Praktijkmanager contextueel zonder andere forecastrollen te hernoemen", () => {
     expect(resolvePlanActualRoleCategory({ budgetCategory: "Praktijkmanager", workPackageCode: "WP3" })).toBe("Interne opleider");
     expect(resolvePlanActualRoleCategory({ budgetCategory: "Praktijkmanager", workPackageCode: "WP4" })).toBe("Praktijkmanagement");

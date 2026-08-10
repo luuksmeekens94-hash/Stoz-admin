@@ -297,6 +297,44 @@ describe("buildFinancialSteeringModel", () => {
     expect(model.totals.consolidatedRealizedEuros).toBeNull();
   });
 
+  it("blokkeert een stale of niet-factureerbare bevestigde begrotingsmapping", () => {
+    const model = buildFinancialSteeringModel({
+      participants: [],
+      budgetLines,
+      invoices: [
+        {
+          id: "stale",
+          supplier: "Leverancier",
+          amountExVat: 1_000,
+          vatAmount: 0,
+          amountIncVat: 1_000,
+          vatTreatment: "EXCLUDED",
+          hasEvidence: true,
+          confirmedBudgetLineId: "verdwenen-regel",
+          workPackageCode: "WP2",
+        },
+        {
+          id: "internal-map",
+          supplier: "Leverancier",
+          amountExVat: 500,
+          vatAmount: 0,
+          amountIncVat: 500,
+          vatTreatment: "EXCLUDED",
+          hasEvidence: true,
+          confirmedBudgetLineId: "internal",
+          workPackageCode: "WP1",
+        },
+      ],
+      overheadRate: 0.15,
+      approvedBudgetSourceStatus: "OFFICIAL_FILE",
+    });
+
+    expect(model.totals.confirmedInvoiceEuros).toBe(0);
+    expect(model.totals.unmappedInvoiceEuros).toBe(1_500);
+    expect(model.blockers).toContain("INVOICE_MAPPING_MISSING");
+    expect(model.totals.consolidatedRealizedEuros).toBeNull();
+  });
+
   it("neemt btw pas mee na expliciete bevestiging en telt nog steeds geen externe urenwaarde op", () => {
     const model = buildFinancialSteeringModel({
       participants,

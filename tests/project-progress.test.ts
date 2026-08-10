@@ -6,6 +6,16 @@ import {
 } from "@/lib/project-progress";
 
 describe("project progress facts", () => {
+  it("claimt bij nul rapportageklare uren geen aantoonbare uitvoering voor een gestarte fase", () => {
+    const progress = assessWorkPackageProgress("2026-08-10", { WP1: 0, WP3: 0 });
+    for (const code of ["WP1", "WP3"]) {
+      const row = progress.find((item) => item.code === code);
+      expect(row?.status).toBe("BEHIND");
+      expect(row?.knownEvidence).toMatch(/0 rapportageklare uren/i);
+      expect(row?.explanation).not.toMatch(/aantoonbare uitvoering/i);
+    }
+  });
+
   it("houdt gereed, getest en gebruikt strikt uit elkaar", () => {
     expect(CONFIRMED_PROGRESS_FACTS.careContentVersions).toMatchObject({
       total: 12,

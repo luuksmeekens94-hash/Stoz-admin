@@ -119,6 +119,17 @@ export function assessWorkPackageProgress(
       };
     }
 
+    if (reportableHours <= 0 && (workPackage.code === "WP1" || workPackage.code === "WP3")) {
+      return {
+        ...workPackage,
+        reportableHours,
+        status: "BEHIND" as const,
+        knownEvidence: "0 rapportageklare uren binnen de gekozen peildatum.",
+        explanation:
+          "De fase is formeel gestart, maar uitvoering is op basis van rapportageklare uren nog niet aantoonbaar.",
+      };
+    }
+
     if (workPackage.code === "WP2") {
       return {
         ...workPackage,
