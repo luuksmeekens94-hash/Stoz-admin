@@ -14,7 +14,7 @@ Webapplicatie voor de projectadministratie van het STOZ-subsidieproject "Hybride
 
 ## Tech Stack
 
-- Next.js 14 (App Router)
+- Next.js 16 (App Router)
 - Prisma + PostgreSQL
 - Tailwind CSS
 - TypeScript
@@ -23,7 +23,7 @@ Webapplicatie voor de projectadministratie van het STOZ-subsidieproject "Hybride
 
 ### 1. Prerequisites
 
-- Node.js 18+
+- Node.js 20.9+
 - PostgreSQL database
 
 ### 2. Setup
@@ -36,8 +36,9 @@ npm install
 cp .env.example .env
 # Pas DATABASE_URL aan naar je PostgreSQL database
 
-# Database initialiseren
-npx prisma db push
+# Prisma Client genereren en gecontroleerde migraties toepassen
+npx prisma generate
+npx prisma migrate deploy
 
 # Seed data laden (gebruikers, werkpakketten, budgetten)
 npm run db:seed
@@ -48,18 +49,7 @@ npm run dev
 
 ### 3. Inloggen
 
-Open http://localhost:3000 en log in met een van de volgende e-mailadressen:
-
-| Naam | Email | Rol |
-|------|-------|-----|
-| Luuk Smeekens | luuk.smeekens@outlook.com | Admin |
-| Marion Brouwer | marion@fysiotherapienijmegen.nl | Intern |
-| Sjoerd Hendriks | sjoerd@fysiotherapienijmegen.nl | Intern |
-| Heidi Staring | heidi@fysiotherapienijmegen.nl | Intern |
-| Lodewijk Tromp | ltromp@symbiomarketing.nl | Extern |
-| Fysiotherapeuten Fy-fit | team@fysiotherapienijmegen.nl | Team |
-
-In dev mode (`DEV_MODE=true`) wordt de magic link direct getoond op het loginscherm.
+Open http://localhost:3000 en vraag met een actief, vooraf geregistreerd e-mailadres een magic link aan. SMTP-configuratie is verplicht; loginlinks en gebruikerslijsten worden nooit door een ontwikkelroute getoond.
 
 ## Rollen
 
@@ -79,22 +69,17 @@ In dev mode (`DEV_MODE=true`) wordt de magic link direct getoond op het loginsch
 
 ## RVO-compliance
 
-- Alle registraties hebben een **onveranderbaar** `createdAt` tijdstempel
+- Alle registraties hebben een onveranderd `createdAt`-tijdstempel; correcties op goedgekeurde uren bewaren before/after, reden, actor en tijdstip
 - Urenstatus doorloopt: Concept → Ingediend → Goedgekeurd
 - Goedkeuringen zijn voorzien van datum en goedkeurder
 - CSV-exports bevatten alle audit-relevante velden
 - Facturen worden opgeslagen met origineel bestand
 
-## Budget
+## Financiële basis
 
-| Categorie | Uren | Tarief | Totaal |
-|-----------|------|--------|--------|
-| Praktijkmanagers (Marion, Sjoerd, Heidi) | 490 | €50/uur | €24.500 |
-| Fysiotherapeuten team | 60 | €50/uur | €3.000 |
-| Front/backoffice | 20 | €50/uur | €1.000 |
-| Luuk (extern) | 325 | €100/uur | €32.500 |
-| Websitebouwer | 25 | €100/uur | €2.500 |
-| Taalambassadeurs | 20 | — | — |
-| **Totaal** | | | **€80.160** |
-
-Subsidie: €39.410
+- Verleende subsidiabele kostenbasis: **€78.820**
+- Maximale subsidie: **€39.410**
+- De ingediende werkmap van €80.160 is niet de financiële bovenlaag
+- Zolang de afzonderlijke aangepaste RVO-XLSX ontbreekt, blijft de begrotingsbron in de applicatie zichtbaar als gereconstrueerd
+- Facturen tellen pas mee na auditbare begrotingskoppeling; btw blijft afzonderlijk geblokkeerd totdat de behandeling expliciet is bevestigd
+- Externe urenwaarde en factuurbedrag worden nooit bij elkaar opgeteld

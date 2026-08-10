@@ -18,6 +18,7 @@ export default function Navigation({ user }: { user: User }) {
 
   const isAdmin = user.role === "ADMIN";
   const canUploadInvoice = user.role === "ADMIN" || user.role === "EXTERNAL";
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   const links = [
     { href: "/dashboard", label: "Dashboard", icon: "📊" },
@@ -27,8 +28,10 @@ export default function Navigation({ user }: { user: User }) {
       : []),
     ...(isAdmin
       ? [
-          { href: "/budget", label: "Budget", icon: "💰" },
+          { href: "/urensturing", label: "Rapportage", icon: "🧭" },
+          { href: "/urenplanning", label: "Planning", icon: "🗓️" },
           { href: "/trainingen", label: "Trainingen", icon: "🎓" },
+          { href: "/vragenlijsten", label: "Metingen", icon: "📝" },
           { href: "/clienten", label: "Cliënten", icon: "👥" },
           { href: "/export", label: "Export", icon: "📥" },
           { href: "/instellingen", label: "Instellingen", icon: "⚙️" },
@@ -59,7 +62,7 @@ export default function Navigation({ user }: { user: User }) {
                 key={link.href}
                 href={link.href}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  pathname.startsWith(link.href)
+                  isActive(link.href)
                     ? "bg-primary-50 text-primary-700"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
@@ -96,7 +99,7 @@ export default function Navigation({ user }: { user: User }) {
                 href={link.href}
                 onClick={() => setMenuOpen(false)}
                 className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                  pathname.startsWith(link.href)
+                  isActive(link.href)
                     ? "bg-primary-50 text-primary-700"
                     : "text-gray-600"
                 }`}

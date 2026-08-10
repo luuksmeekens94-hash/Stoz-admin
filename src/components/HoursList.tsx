@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface Entry {
   id: string;
@@ -9,6 +10,7 @@ interface Entry {
   hours: number;
   description: string;
   status: string;
+
   createdAt: string;
   user: { id: string; name: string };
   workPackage: { code: string; name: string };
@@ -76,13 +78,14 @@ export default function HoursList({
     }
   }
 
+
   function startEdit(entry: Entry) {
     setEditingId(entry.id);
     setEditHours(String(entry.hours));
   }
 
   async function saveEdit(id: string) {
-    const hours = parseFloat(editHours);
+    const hours = Number(editHours);
     if (isNaN(hours) || hours <= 0) {
       setEditingId(null);
       return;
@@ -207,8 +210,8 @@ export default function HoursList({
                   {editingId === entry.id ? (
                     <input
                       type="number"
-                      step="0.5"
-                      min="0.5"
+                      step="0.25"
+                      min="0.25"
                       value={editHours}
                       onChange={(e) => setEditHours(e.target.value)}
                       onBlur={() => saveEdit(entry.id)}
@@ -289,6 +292,15 @@ export default function HoursList({
                           ↩️
                         </button>
                       </>
+                    )}
+                    {isAdmin && entry.status === "APPROVED" && (
+                      <Link
+                        href={`/uren/${entry.id}/corrigeren`}
+                        className="text-amber-700 hover:text-amber-900 text-xs px-1"
+                        title="Auditbare correctie"
+                      >
+                        🛠️
+                      </Link>
                     )}
                   </div>
                 </td>

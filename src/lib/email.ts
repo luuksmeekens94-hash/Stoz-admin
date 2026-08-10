@@ -1,46 +1,92 @@
 import nodemailer from "nodemailer";
 
-function getTransporter() {
+export interface TransactionalEmail {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+function smtpPort() {
+  const parsed = Number(process.env.SMTP_PORT || "587");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 587;
+}
+
+export function isEmailConfigured() {
+  return Boolean(
+    process.env.SMTP_HOST &&
+      process.env.SMTP_USER &&
+      (process.env.SMTP_PASSWORD || process.env.SMTP_PASS) &&
+      (process.env.SMTP_FROM || process.env.SMTP_USER),
+  );
+}
+
+function createTransporter() {
+  if (!isEmailConfigured()) {
+    throw new Error("SMTP_NOT_CONFIGURED");
+  }
+
+  const port = smtpPort();
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "localhost",
-    port: parseInt(process.env.SMTP_PORT || "587"),
-    secure: false,
+    host: process.env.SMTP_HOST,
+    port,
+    secure: port === 465,
     auth: {
-      user: process.env.SMTP_USER || "",
-      pass: process.env.SMTP_PASS || "",
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS,
     },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 30_000,
   });
 }
 
-export async function sendMagicLinkEmail(email: string, token: string) {
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
-  const magicUrl = `${baseUrl}/auth/verify?token=${token}`;
+function fromAddress() {
+  return process.env.SMTP_FROM || process.env.SMTP_USER || "";
+}
 
-  if (process.env.DEV_MODE === "true") {
-    console.log(`\n🔗 Magic link for ${email}:\n${magicUrl}\n`);
-    return;
+export async function sendTransactionalEmail(message: TransactionalEmail) {
+  const transporter = createTransporter();
+  const result = await transporter.sendMail({
+    from: `"STOZ Hybride Begrip · Fy-fit" <${fromAddress()}>`,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+
+  return {
+    messageId: result.messageId || null,
+    accepted: Array.isArray(result.accepted) ? result.accepted.map(String) : [],
+    rejected: Array.isArray(result.rejected) ? result.rejected.map(String) : [],
+  };
+}
+
+export async function sendMagicLink(email: string, verifyUrl: string) {
+  if (!isEmailConfigured()) {
+    console.log(`[DEV] Magic link aangemaakt voor ${email}; SMTP is niet geconfigureerd.`);
+    return false;
   }
 
-  const transporter = getTransporter();
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || "noreply@stoz-admin.nl",
+  await sendTransactionalEmail({
     to: email,
-    subject: "Inloggen STOZ Administratie",
+    subject: "Inloggen bij STOZ Projectadministratie",
+    text: `Klik op deze link om in te loggen: ${verifyUrl}\n\nDeze link is 15 minuten geldig.\n\nAls je deze link niet hebt aangevraagd, kun je deze e-mail negeren.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1e40af;">STOZ Projectadministratie</h2>
-        <p>Klik op de onderstaande link om in te loggen:</p>
-        <a href="${magicUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; margin: 16px 0;">
-          Inloggen
-        </a>
-        <p style="color: #6b7280; font-size: 14px;">
-          Deze link is 15 minuten geldig en kan maar één keer gebruikt worden.
-        </p>
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-        <p style="color: #9ca3af; font-size: 12px;">
-          Hybride Begrip - STOZ Projectadministratie
-        </p>
+        <div style="background: #122E54; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">STOZ Projectadministratie</h1>
+          <p style="color: #e5e7eb; margin: 5px 0 0;">Hybride begrip - Fy-fit</p>
+        </div>
+        <div style="padding: 30px; background: #f9fafb;">
+          <h2 style="color: #1f2937;">Inloggen</h2>
+          <p style="color: #4b5563;">Klik op de knop hieronder om veilig in te loggen:</p>
+          <a href="${verifyUrl}" style="display: inline-block; background: #122E54; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin: 15px 0;">Inloggen</a>
+          <p style="color: #6b7280; font-size: 13px;">Deze link is 15 minuten geldig.</p>
+          <p style="color: #6b7280; font-size: 13px;">Als je deze link niet hebt aangevraagd, kun je deze e-mail negeren.</p>
+        </div>
       </div>
     `,
   });
+  return true;
 }

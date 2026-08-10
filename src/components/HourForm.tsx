@@ -39,11 +39,13 @@ export default function HourForm({
   currentUser,
   allUsers,
   therapists,
+  initialValues,
 }: {
   workPackages: WorkPackage[];
   currentUser: User;
   allUsers?: User[];
   therapists?: Therapist[];
+  initialValues?: { activityId?: string; description?: string };
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -61,8 +63,10 @@ export default function HourForm({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [hours, setHours] = useState("");
-  const [description, setDescription] = useState("");
-  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
+  const [description, setDescription] = useState(initialValues?.description || "");
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>(
+    initialValues?.activityId ? [initialValues.activityId] : [],
+  );
 
   const selectedUsers = selectableUsers.filter((user) => selectedUserIds.includes(user.id));
   const showTherapistPicker = selectedUsers.some((user) => user.role === "TEAM");
@@ -160,6 +164,16 @@ export default function HourForm({
 
     if (showTherapistPicker && selectedTherapists.length === 0) {
       setError("Selecteer minimaal één fysiotherapeut voor het teamaccount");
+      return;
+    }
+
+    const hoursPerEntry = Number(hours);
+    if (
+      totalEntries > 1 &&
+      !confirm(
+        `${hoursPerEntry} uur wordt per persoon-activiteitcombinatie opgeslagen: ${totalEntries} regels, samen ${hoursPerEntry * totalEntries} uur. Doorgaan?`,
+      )
+    ) {
       return;
     }
 

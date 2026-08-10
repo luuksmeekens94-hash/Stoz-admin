@@ -32,6 +32,7 @@ export default async function UrenPage({
       user: { select: { id: true, name: true } },
       workPackage: true,
       activity: true,
+      therapist: true,
     },
   });
 

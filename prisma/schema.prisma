@@ -20,6 +20,49 @@ enum HourStatus {
   APPROVED
 }
 
+enum SurveyCampaignStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum SurveyTemplateCode {
+  THERAPIST_BASELINE
+}
+
+enum SurveyDeliveryStatus {
+  PREPARED
+  SENT
+  FAILED
+}
+
+enum PlanningVersionStatus {
+  CONCEPT
+  ARCHIVED
+}
+
+enum PlanningSourceStatus {
+  RECONSTRUCTED_PENDING_APPROVED_XLSX
+  FORMALLY_CONFIRMED
+}
+
+enum PlanningReviewState {
+  DRAFT
+  REVIEWED
+}
+
+enum PlanningAllocationSourceState {
+  APPROVED_REMAINING
+  OUTSIDE_APPROVED_QUANTITY
+  DECISION_REQUIRED
+}
+
+enum InvoiceVatTreatment {
+  PENDING
+  EXCLUDED
+  INCLUDED_CONFIRMED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -29,11 +72,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  hourEntries      HourEntry[]
-  magicLinks       MagicLink[]
-  sessions         Session[]
-  invoices         Invoice[]
+  hourEntries       HourEntry[]
+  magicLinks        MagicLink[]
+  sessions          Session[]
+  invoices          Invoice[]
   budgetAllocations BudgetAllocation[]
+  surveyCampaigns   SurveyCampaign[]
+  planningVersions  PlanningVersion[]
 }
 
 model Session {
@@ -58,23 +103,25 @@ model MagicLink {
 }
 
 model WorkPackage {
-  id          String     @id @default(cuid())
-  code        String     @unique
-  name        String
-  activities  Activity[]
-  hourEntries HourEntry[]
-  invoices    Invoice[]
-  createdAt   DateTime   @default(now())
+  id              String                  @id @default(cuid())
+  code            String                  @unique
+  name            String
+  activities      Activity[]
+  hourEntries     HourEntry[]
+  invoices        Invoice[]
+  planAllocations MonthlyPlanAllocation[]
+  createdAt       DateTime                @default(now())
 }
 
 model Activity {
-  id            String      @id @default(cuid())
-  code          String      @unique
-  name          String
-  workPackageId String
-  workPackage   WorkPackage  @relation(fields: [workPackageId], references: [id])
-  hourEntries   HourEntry[]
-  createdAt     DateTime    @default(now())
+  id              String                  @id @default(cuid())
+  code            String                  @unique
+  name            String
+  workPackageId   String
+  workPackage     WorkPackage             @relation(fields: [workPackageId], references: [id])
+  hourEntries     HourEntry[]
+  planAllocations MonthlyPlanAllocation[]
+  createdAt       DateTime                @default(now())
 }
 
 model HourEntry {
@@ -105,33 +152,39 @@ model HourEntry {
 }
 
 model Invoice {
-  id            String    @id @default(cuid())
-  date          DateTime
-  supplier      String
-  invoiceNumber String
-  description   String
-  amountExVat   Float
-  vatAmount     Float
-  amountIncVat  Float
-  paymentDate   DateTime?
-  filePath      String?
-  fileName      String?
-  fileData      String?   @db.Text
-  fileMime      String?
-  workPackageId String
-  uploadedById  String
+  id                    String              @id @default(cuid())
+  date                  DateTime
+  supplier              String
+  invoiceNumber         String
+  description           String
+  amountExVat           Float
+  vatAmount             Float
+  amountIncVat          Float
+  paymentDate           DateTime?
+  filePath              String?
+  fileName              String?
+  fileData              String?             @db.Text
+  fileMime              String?
+  workPackageId         String
+  uploadedById          String
+  confirmedBudgetLineId String?
+  vatTreatment          InvoiceVatTreatment @default(PENDING)
+  classificationReason  String?
+  classifiedAt          DateTime?
+  classifiedById        String?
   // IMMUTABLE
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   workPackage WorkPackage @relation(fields: [workPackageId], references: [id])
-  uploadedBy  User       @relation(fields: [uploadedById], references: [id])
+  uploadedBy  User        @relation(fields: [uploadedById], references: [id])
 
   @@index([workPackageId])
+  @@index([confirmedBudgetLineId])
 }
 
 model Training {
-  id        String              @id @default(cuid())
+  id        String             @id @default(cuid())
   name      String
   date      DateTime
   hours     Float
@@ -139,8 +192,8 @@ model Training {
   notes     String?
   attendees TrainingAttendee[]
   // IMMUTABLE
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
 }
 
 model TrainingAttendee {
@@ -157,35 +210,164 @@ model TrainingAttendee {
 }
 
 model Therapist {
-  id         String      @id @default(cuid())
-  name       String
-  hourlyRate Float?
-  active     Boolean     @default(true)
-  hourEntries HourEntry[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id                String             @id @default(cuid())
+  name              String
+  hourlyRate        Float?
+  active            Boolean            @default(true)
+  hourEntries       HourEntry[]
+  surveyInvitations SurveyInvitation[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model SurveyCampaign {
+  id           String               @id @default(cuid())
+  name         String
+  templateCode SurveyTemplateCode   @default(THERAPIST_BASELINE)
+  status       SurveyCampaignStatus @default(DRAFT)
+  closesAt     DateTime
+  createdById  String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  createdBy   User               @relation(fields: [createdById], references: [id])
+  invitations SurveyInvitation[]
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model SurveyInvitation {
+  id               String    @id @default(cuid())
+  campaignId       String
+  therapistId      String?
+  recipientName    String
+  recipientEmail   String
+  tokenHash        String?   @unique
+  expiresAt        DateTime
+  sentAt           DateTime?
+  revokedAt        DateTime?
+  deliveryLockedAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  campaign   SurveyCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  therapist  Therapist?       @relation(fields: [therapistId], references: [id])
+  response   SurveyResponse?
+  deliveries SurveyDelivery[]
+
+  @@unique([campaignId, recipientEmail])
+  @@index([campaignId])
+  @@index([therapistId])
+  @@index([expiresAt])
+}
+
+model SurveyDelivery {
+  id                String               @id @default(cuid())
+  invitationId      String
+  status            SurveyDeliveryStatus
+  provider          String
+  providerMessageId String?
+  attemptedAt       DateTime             @default(now())
+  sentAt            DateTime?
+  failureCode       String?
+  failureMessage    String?              @db.Text
+
+  invitation SurveyInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  @@index([invitationId])
+  @@index([status])
+}
+
+model SurveyResponse {
+  id           String   @id @default(cuid())
+  invitationId String   @unique
+  answers      Json
+  submittedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  invitation SurveyInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
 }
 
 model Client {
-  id           String    @id @default(cuid())
-  clientCode   String    @unique
-  toolUsed     String
-  startDate    DateTime
-  endDate      DateTime?
-  notes        String?
+  id         String    @id @default(cuid())
+  clientCode String    @unique
+  toolUsed   String
+  startDate  DateTime
+  endDate    DateTime?
+  notes      String?
   // IMMUTABLE
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model BudgetAllocation {
-  id           String  @id @default(cuid())
-  userId       String?
-  category     String
-  budgetHours  Float
-  hourlyRate   Float
-  description  String?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String?
+  category    String
+  budgetHours Float
+  hourlyRate  Float
+  description String?
+  createdAt   DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
+}
+
+model PlanningVersion {
+  id              String                @id @default(cuid())
+  revision        Int                   @unique
+  status          PlanningVersionStatus @default(CONCEPT)
+  sourceStatus    PlanningSourceStatus
+  sourceReference String                @db.Text
+  periodStart     DateTime
+  periodEnd       DateTime
+  createdById     String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  createdBy   User                    @relation(fields: [createdById], references: [id])
+  allocations MonthlyPlanAllocation[]
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model MonthlyPlanAllocation {
+  id                String                        @id @default(cuid())
+  planningVersionId String
+  monthStart        DateTime
+  budgetLineKey     String
+  roleCategory      String
+  label             String
+  workPackageId     String
+  activityId        String
+  plannedHours      Float
+  rationale         String                        @db.Text
+  sourceState       PlanningAllocationSourceState
+  reviewState       PlanningReviewState           @default(DRAFT)
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+
+  planningVersion PlanningVersion @relation(fields: [planningVersionId], references: [id], onDelete: Cascade)
+  workPackage     WorkPackage     @relation(fields: [workPackageId], references: [id])
+  activity        Activity        @relation(fields: [activityId], references: [id])
+
+  @@unique([planningVersionId, monthStart, budgetLineKey, workPackageId, activityId])
+  @@index([planningVersionId])
+  @@index([monthStart])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  entityType  String
+  entityId    String
+  action      String
+  reason      String   @db.Text
+  beforeData  Json?
+  afterData   Json?
+  actorUserId String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }

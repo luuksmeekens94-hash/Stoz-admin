@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { hasValidInvoiceAmounts, hasValidInvoiceEvidence } from "@/lib/financial-steering";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -36,9 +37,9 @@ export async function POST(request: NextRequest) {
     const supplier = formData.get("supplier") as string;
     const invoiceNumber = formData.get("invoiceNumber") as string;
     const description = formData.get("description") as string;
-    const amountExVat = parseFloat(formData.get("amountExVat") as string) || 0;
-    const vatAmount = parseFloat(formData.get("vatAmount") as string) || 0;
-    const amountIncVat = parseFloat(formData.get("amountIncVat") as string) || 0;
+    const amountExVat = Number(formData.get("amountExVat"));
+    const vatAmount = Number(formData.get("vatAmount"));
+    const amountIncVat = Number(formData.get("amountIncVat"));
     const paymentDate = formData.get("paymentDate") as string;
     const workPackageId = formData.get("workPackageId") as string;
     const file = formData.get("file") as File | null;
@@ -46,16 +47,40 @@ export async function POST(request: NextRequest) {
     if (!date || !supplier || !invoiceNumber || !description || !workPackageId) {
       return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
     }
+    if (
+      !hasValidInvoiceAmounts({
+        id: "invoice-input",
+        supplier,
+        amountExVat,
+        vatAmount,
+        amountIncVat,
+        hasEvidence: Boolean(file && file.size > 0),
+      })
+    ) {
+      return NextResponse.json(
+        { error: "Factuurbedragen moeten niet-negatief zijn en ex. btw + btw moet incl. btw zijn." },
+        { status: 400 },
+      );
+    }
 
     let fileData: string | undefined;
     let fileName: string | undefined;
     let fileMime: string | undefined;
 
     if (file && file.size > 0) {
+      if (file.size > 10 * 1024 * 1024) {
+        return NextResponse.json({ error: "Factuurbestand is groter dan 10 MB" }, { status: 400 });
+      }
       const bytes = await file.arrayBuffer();
       fileData = Buffer.from(bytes).toString("base64");
       fileName = file.name;
       fileMime = file.type;
+      if (!hasValidInvoiceEvidence({ fileData, fileName, fileMime })) {
+        return NextResponse.json(
+          { error: "Alleen geldige PDF-, JPEG- en PNG-factuurbestanden zijn toegestaan" },
+          { status: 400 },
+        );
+      }
     }
 
     const invoice = await prisma.invoice.create({

@@ -8,3 +8,5 @@ next-env.d.ts
 tmp*.txt
 
 .vercel
+.hermes/
+.env*

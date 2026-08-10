@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  HourInputError,
+  parseHourInput,
+  parseProjectDateInput,
+  validateHourEntryDraft,
+} from "@/lib/hour-entry-validation";
 
 interface HourEntryInput {
   date?: string;
@@ -72,14 +78,38 @@ export async function POST(request: NextRequest) {
       )
     );
 
-    const users = await prisma.user.findMany({
-      where: { id: { in: targetUserIds }, active: true },
-      select: { id: true },
-    });
+    const activityIds = Array.from(new Set(rawEntries.map((entry) => String(entry.activityId || ""))));
+    const therapistIds = Array.from(
+      new Set(rawEntries.map((entry) => entry.therapistId).filter((id): id is string => Boolean(id))),
+    );
+    const [users, activities, activeTherapists] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: targetUserIds }, active: true },
+        select: { id: true },
+      }),
+      prisma.activity.findMany({
+        where: { id: { in: activityIds } },
+        select: { id: true, workPackageId: true },
+      }),
+      therapistIds.length
+        ? prisma.therapist.findMany({
+            where: { id: { in: therapistIds }, active: true },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+    ]);
     const validUserIds = new Set(users.map((user) => user.id));
+    const activityById = new Map(activities.map((activity) => [activity.id, activity]));
+    const validTherapistIds = new Set(activeTherapists.map((therapist) => therapist.id));
 
     if (validUserIds.size !== targetUserIds.length) {
       return NextResponse.json({ error: "Een of meer gebruikers zijn niet gevonden" }, { status: 404 });
+    }
+    if (activityById.size !== activityIds.length) {
+      return NextResponse.json({ error: "Een of meer activiteiten zijn niet gevonden" }, { status: 404 });
+    }
+    if (validTherapistIds.size !== therapistIds.length) {
+      return NextResponse.json({ error: "Een of meer therapeuten zijn niet gevonden" }, { status: 404 });
     }
 
     const entries = rawEntries.map((entry) => {
@@ -87,21 +117,27 @@ export async function POST(request: NextRequest) {
       const targetUserId = isAdmin && entry.onBehalfOf ? String(entry.onBehalfOf) : session.user.id;
 
       if (!date || !hours || !workPackageId || !activityId) {
-        throw new Error("Datum, uren, werkpakket en activiteit zijn verplicht");
+        throw new HourInputError("Datum, uren, werkpakket en activiteit zijn verplicht");
       }
 
-      const parsedHours = parseFloat(String(hours));
-
-      if (Number.isNaN(parsedHours) || parsedHours <= 0 || parsedHours > 24) {
-        throw new Error("Uren moet tussen 0 en 24 zijn");
-      }
+      const parsedHours = parseHourInput(hours);
+      const { date: parsedDate, dateKey } = parseProjectDateInput(date);
+      const activity = activityById.get(activityId);
+      if (!activity) throw new Error("Activiteit niet gevonden");
+      validateHourEntryDraft({
+        dateKey,
+        now: new Date(),
+        hours: parsedHours,
+        workPackageId,
+        activityWorkPackageId: activity.workPackageId,
+      });
 
       if (!validUserIds.has(targetUserId)) {
         throw new Error("Gebruiker niet gevonden");
       }
 
       return {
-        date: new Date(date),
+        date: parsedDate,
         hours: parsedHours,
         description: description || "Werkzaamheden",
         userId: targetUserId,
@@ -132,6 +168,9 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown";
     console.error("Create hour entry error:", msg);
-    return NextResponse.json({ error: `Fout bij opslaan: ${msg}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Fout bij opslaan: ${msg}` },
+      { status: error instanceof HourInputError ? 400 : 500 },
+    );
   }
 }
