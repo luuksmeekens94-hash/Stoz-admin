@@ -296,7 +296,12 @@ export default async function UrensturingPage() {
               Peildatum {dateLabel(asOf)} · eerste verslagperiode {dateLabel(PROJECT_STEERING_CONFIG.reportPeriodStart)} t/m {dateLabel(PROJECT_STEERING_CONFIG.reportPeriodEnd)}.
             </p>
           </div>
-          <ReportActions asOf={asOf} />
+          <div className="no-print flex flex-wrap items-center gap-2">
+            <Link href="/uren/reconstructie" className="btn-secondary border-white/30 bg-white/10 text-white hover:bg-white/20">
+              Ontbrekende uren beoordelen
+            </Link>
+            <ReportActions asOf={asOf} />
+          </div>
         </div>
       </section>
 

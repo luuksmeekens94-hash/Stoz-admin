@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import HourForm from "@/components/HourForm";
+import { amsterdamDateKey } from "@/lib/reporting-control";
 
 export default async function NieuwUrenPage({
   searchParams,
@@ -60,6 +61,7 @@ export default async function NieuwUrenPage({
         currentUser={{ id: session.user.id, name: session.user.name, role: session.user.role }}
         allUsers={JSON.parse(JSON.stringify(allUsers))}
         therapists={JSON.parse(JSON.stringify(therapists))}
+        ordinaryRegistrationDate={amsterdamDateKey(new Date())}
         initialValues={{
           activityId: requestedActivity?.id,
           description: validPlanningPrefill ? String(params.description || "").slice(0, 240) : undefined,

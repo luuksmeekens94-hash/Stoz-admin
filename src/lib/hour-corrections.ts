@@ -34,6 +34,8 @@ export interface HourCorrectionSnapshot {
   therapistId: string | null;
 }
 
+export class HourCorrectionError extends Error {}
+
 
 function dateKey(value: Date | string): string {
   if (typeof value === "string") return value.slice(0, 10);
@@ -55,9 +57,12 @@ export function buildApprovedHourCorrection(
   current: CorrectableHourEntry,
   input: ApprovedHourCorrectionInput
 ) {
-  const reason = input.correctionReason?.trim() ?? "";
+  if (typeof input.correctionReason !== "string") {
+    throw new HourCorrectionError("Correctiereden moet tekst zijn.");
+  }
+  const reason = input.correctionReason.trim();
   if (reason.length < 15) {
-    throw new Error("Geef een concrete correctiereden van minimaal 15 tekens.");
+    throw new HourCorrectionError("Geef een concrete correctiereden van minimaal 15 tekens.");
   }
 
   const before = snapshot(current);
@@ -66,7 +71,7 @@ export function buildApprovedHourCorrection(
   if (input.date !== undefined) {
     const { dateKey: nextDate } = parseProjectDateInput(input.date);
     if (nextDate < PROJECT_START_DATE || nextDate > PROJECT_END_DATE) {
-      throw new Error("Datum valt buiten de formele projectperiode.");
+      throw new HourCorrectionError("Datum valt buiten de formele projectperiode.");
     }
     after.date = nextDate;
   }
@@ -74,18 +79,21 @@ export function buildApprovedHourCorrection(
   if (input.hours !== undefined) {
     const parsedHours = parseHourInput(input.hours);
     if (parsedHours <= 0 || parsedHours > 24) {
-      throw new Error("Uren moet groter dan 0 en maximaal 24 zijn.");
+      throw new HourCorrectionError("Uren moet groter dan 0 en maximaal 24 zijn.");
     }
     if (Math.round(parsedHours * 4) !== parsedHours * 4) {
-      throw new Error("Uren moet in kwartieren worden geregistreerd.");
+      throw new HourCorrectionError("Uren moet in kwartieren worden geregistreerd.");
     }
     after.hours = parsedHours;
   }
 
   if (input.description !== undefined) {
+    if (typeof input.description !== "string") {
+      throw new HourCorrectionError("Omschrijving moet tekst zijn.");
+    }
     const description = input.description.trim();
     if (description.length < 5) {
-      throw new Error("Geef een herleidbare omschrijving van de werkzaamheden.");
+      throw new HourCorrectionError("Geef een herleidbare omschrijving van de werkzaamheden.");
     }
     after.description = description;
   }
@@ -99,7 +107,7 @@ export function buildApprovedHourCorrection(
   );
 
   if (changedFields.length === 0) {
-    throw new Error("De correctie bevat geen wijziging.");
+    throw new HourCorrectionError("De correctie bevat geen wijziging.");
   }
 
   return {

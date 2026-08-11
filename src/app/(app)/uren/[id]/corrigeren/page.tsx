@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import HourCorrectionForm from "@/components/HourCorrectionForm";
+import { HISTORICAL_RECONSTRUCTION_CREATE_ACTION } from "@/lib/historical-reconstruction-db";
 
 export default async function HourCorrectionPage({
   params,
@@ -32,6 +33,31 @@ export default async function HourCorrectionPage({
 
   if (!entry) notFound();
   if (entry.status !== "APPROVED") redirect("/uren");
+  const isHistoricalReconstruction = auditEvents.some(
+    (event) => event.action === HISTORICAL_RECONSTRUCTION_CREATE_ACTION,
+  );
+
+  if (isHistoricalReconstruction) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <Link className="text-sm text-primary-700 hover:underline" href="/uren?status=APPROVED">
+          ← Terug naar goedgekeurde uren
+        </Link>
+        <section className="card border-amber-200 bg-amber-50">
+          <h1 className="text-2xl font-bold text-amber-950">Historische reconstructie vergrendeld</h1>
+          <p className="mt-3 text-sm text-amber-900">
+            Deze registratie blijft gekoppeld aan de oorspronkelijke bron, doelstand en
+            creatie-audit. Daarom is het gewone correctieformulier niet beschikbaar.
+          </p>
+          <p className="mt-2 text-sm text-amber-900">
+            Zet de reconstructie als beheerder via de urenlijst terug naar concept. Daarna kun je
+            het concept auditbaar verwijderen en met een nieuwe request-id opnieuw reconstrueren,
+            zonder het bestaande auditspoor te overschrijven.
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

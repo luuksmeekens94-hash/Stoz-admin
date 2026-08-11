@@ -1,3 +1,5 @@
+import { amsterdamDateKey } from "@/lib/reporting-control";
+
 export const PROJECT_START_DATE = "2025-09-01";
 export const PROJECT_END_DATE = "2027-08-31";
 
@@ -24,6 +26,52 @@ export function parseHourInput(value: unknown) {
   return hours;
 }
 
+export function validateOrdinaryHourCreationDateKey(dateKey: string, today: string) {
+  if (dateKey < today) {
+    throw new HourInputError(
+      "Uren van vóór vandaag kunnen alleen via de auditbare historische reconstructie worden toegevoegd.",
+    );
+  }
+  if (dateKey > today) {
+    throw new HourInputError("Toekomstige uren kunnen niet als werkelijk werk worden geregistreerd.");
+  }
+}
+
+export function validateOrdinaryHourCreationDate(dateKey: string, now: Date) {
+  validateOrdinaryHourCreationDateKey(dateKey, amsterdamDateKey(now));
+}
+
+export function validateOrdinaryHistoricalDraftEditDateKey(dateKey: string, today: string) {
+  if (dateKey !== today) {
+    throw new HourInputError(
+      "Een historisch concept is inhoudelijk vergrendeld. Dien het ongewijzigd in of laat een beheerder het verwijderen en auditbaar reconstrueren.",
+    );
+  }
+}
+
+export function validateOrdinaryHistoricalDraftEdit(dateKey: string, now: Date) {
+  validateOrdinaryHistoricalDraftEditDateKey(dateKey, amsterdamDateKey(now));
+}
+
+export function validateOrdinaryApprovedCorrectionDateKey(
+  currentDateKey: string,
+  correctedDateKey: string,
+  today: string,
+) {
+  if (correctedDateKey !== currentDateKey) {
+    validateOrdinaryHourCreationDateKey(correctedDateKey, today);
+  }
+}
+
+export function validateUserTherapistPairing(role: string, therapistId: string | null) {
+  if (role === "TEAM" && !therapistId) {
+    throw new HourInputError("Voor een TEAM-registratie is een actieve therapeut verplicht.");
+  }
+  if (role !== "TEAM" && therapistId) {
+    throw new HourInputError("Een therapeut kan alleen aan een TEAM-registratie worden gekoppeld.");
+  }
+}
+
 export function validateHourEntryDraft(input: {
   dateKey: string;
   now: Date;
@@ -38,7 +86,7 @@ export function validateHourEntryDraft(input: {
     throw new HourInputError("De activiteit hoort niet bij het gekozen werkpakket.");
   }
 
-  const today = input.now.toISOString().slice(0, 10);
+  const today = amsterdamDateKey(input.now);
   if (input.dateKey > today) throw new HourInputError("Toekomstige uren kunnen niet als werkelijk werk worden geregistreerd.");
   if (input.dateKey < PROJECT_START_DATE || input.dateKey > PROJECT_END_DATE) {
     throw new HourInputError("Datum valt buiten de formele projectperiode.");

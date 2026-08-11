@@ -94,7 +94,7 @@ export default function HourCorrectionForm({
         beheerder worden als auditgebeurtenis vastgelegd.
       </div>
 
-      {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm font-medium">
