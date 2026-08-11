@@ -3,6 +3,7 @@ import type { WorkPackagePhase } from "@/lib/project-steering";
 
 export type ApprovedBudgetSourceStatus =
   | "OFFICIAL_FILE"
+  | "OFFICIAL_DECISION_RECONCILED"
   | "RECONSTRUCTED_PENDING_APPROVED_XLSX";
 
 export const PROJECT_STEERING_CONFIG = {
@@ -19,7 +20,7 @@ export const PROJECT_STEERING_CONFIG = {
   approvedSubsidyEuros: 39_410,
   submittedProjectCostsEuros: 80_160,
   submittedIndicativeSubsidyEuros: 40_080,
-  approvedBudgetSourceStatus: "RECONSTRUCTED_PENDING_APPROVED_XLSX" as ApprovedBudgetSourceStatus,
+  approvedBudgetSourceStatus: "OFFICIAL_DECISION_RECONCILED" as ApprovedBudgetSourceStatus,
 } as const;
 
 /**
@@ -28,7 +29,8 @@ export const PROJECT_STEERING_CONFIG = {
  * - de opgevoerde deelnemer Praktijkmanager en huisartsen (€920) is niet subsidiabel.
  *
  * De som is daardoor €78.820 en sluit exact aan op 2 × de verleende subsidie van €39.410.
- * De losse door RVO aangepaste XLSX ontbreekt lokaal nog; de bronstatus blijft daarom fail-closed.
+ * De ingediende Model B-begroting en de RVO-beschikking vormen samen de gereconcilieerde
+ * officiële bron. De beschikking gaat voor waar RVO bedragen heeft aangepast.
  */
 export const APPROVED_BUDGET_LINES: FinancialBudgetLine[] = [
   {
@@ -67,7 +69,7 @@ export const APPROVED_BUDGET_LINES: FinancialBudgetLine[] = [
     label: "Fysiotherapeuten Fy-fit · implementatie",
     rvoSection: "IMPLEMENTATION",
     costType: "INTERNAL_LABOUR",
-    eligibleWorkPackageCodes: ["WP4"],
+    eligibleWorkPackageCodes: ["WP2", "WP4"],
     budgetHours: 60,
     hourlyRate: 50,
     budgetEuros: 3_000,
@@ -208,7 +210,7 @@ export const CATEGORY_USER_EMAILS: Record<string, string> = {
 
 export const EXPECTED_WORK_PACKAGES_BY_CATEGORY: Record<string, string[]> = {
   Praktijkmanager: ["WP1", "WP2", "WP3", "WP4", "WP5", "WP6"],
-  Fysiotherapeuten: ["WP3", "WP4"],
+  Fysiotherapeuten: ["WP2", "WP3", "WP4"],
   "Front/backoffice": ["WP3", "WP4", "WP5"],
   "Extern adviseur": ["WP1", "WP2", "WP3", "WP4", "WP5", "WP6"],
   Websitebouwer: ["WP2"],

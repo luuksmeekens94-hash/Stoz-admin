@@ -77,6 +77,35 @@ export default async function DashboardPage() {
         )}
       </section>
 
+      {isAdmin && (
+        <section>
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary-700">Werk in drie stappen</p>
+            <h2 className="text-2xl font-bold text-gray-950">Voortgangsrapportage en maandsturing</h2>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Link href="/urensturing#inhoudelijk" className="card border-t-4 border-t-blue-700 transition hover:-translate-y-0.5 hover:shadow-lg">
+              <div className="flex items-center justify-between"><span className="text-sm font-bold text-blue-800">STAP 1</span><span className="text-2xl">📝</span></div>
+              <h3 className="mt-3 text-lg font-semibold">Inhoudelijk voortgangsverslag</h3>
+              <p className="mt-2 text-sm text-gray-600">Bekijk de verwerkte projectduiding en werk samen met Grote Speler het Model D-concept af.</p>
+              <span className="mt-4 inline-block font-semibold text-blue-700">Open inhoudelijk dossier →</span>
+            </Link>
+            <Link href="/uren/reconstructie" className="card border-t-4 border-t-amber-600 transition hover:-translate-y-0.5 hover:shadow-lg">
+              <div className="flex items-center justify-between"><span className="text-sm font-bold text-amber-800">STAP 2</span><span className="text-2xl">💶</span></div>
+              <h3 className="mt-3 text-lg font-semibold">Financieel voortgangsverslag</h3>
+              <p className="mt-2 text-sm text-gray-600">Zet de bevestigde ontbrekende uren klaar, vul de datum in en actualiseer daarna het Model B-concept.</p>
+              <span className="mt-4 inline-block font-semibold text-amber-700">Uren aanvullen →</span>
+            </Link>
+            <Link href="/urenplanning" className="card border-t-4 border-t-emerald-600 transition hover:-translate-y-0.5 hover:shadow-lg">
+              <div className="flex items-center justify-between"><span className="text-sm font-bold text-emerald-800">STAP 3</span><span className="text-2xl">📅</span></div>
+              <h3 className="mt-3 text-lg font-semibold">Maandelijkse uren klaarzetten</h3>
+              <p className="mt-2 text-sm text-gray-600">Controleer de verwachte uren per functie en keur de maand met één knop goed.</p>
+              <span className="mt-4 inline-block font-semibold text-emerald-700">Open maandplanning →</span>
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="card border-l-4 border-l-primary-600">
           <p className="text-sm text-gray-500">Rapportageklare uren</p>

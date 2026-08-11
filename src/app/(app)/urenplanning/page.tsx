@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import ForecastEntryDeleteButton from "@/components/ForecastEntryDeleteButton";
+import ForecastEntryForm from "@/components/ForecastEntryForm";
 import PlanningVersionActions from "@/components/PlanningVersionActions";
+import MonthlyPlanningApprovalBoard, {
+  type MonthlyPlanningApprovalMonth,
+} from "@/components/MonthlyPlanningApprovalBoard";
 import { getSession } from "@/lib/auth";
 import {
   buildCorrectiveMonthlyPlan,
   comparePlanActual,
+  forecastExecutorsFor,
   findActualOnlyComparisons,
   resolvePlanActualRoleCategory,
   spreadPlannedHoursAcrossDates,
@@ -38,7 +44,11 @@ export default async function HoursPlanningPage() {
       include: {
         allocations: {
           orderBy: [{ monthStart: "asc" }, { label: "asc" }],
-          include: { workPackage: { select: { code: true } }, activity: { select: { code: true } } },
+          include: {
+            workPackage: { select: { code: true } },
+            activity: { select: { code: true } },
+            forecastEntries: { orderBy: [{ plannedDate: "asc" }, { executorName: "asc" }] },
+          },
         },
         createdBy: { select: { name: true } },
       },
@@ -79,10 +89,7 @@ export default async function HoursPlanningPage() {
         rationale: allocation.rationale,
         sourceState: allocation.sourceState,
         canMaterialize: false,
-        registrationPreparation:
-          allocation.sourceState === "APPROVED_REMAINING"
-            ? "PREFILL_ONLY_AFTER_EXECUTION"
-            : "BLOCKED_PENDING_DECISION",
+        registrationPreparation: "PREFILL_ONLY_AFTER_EXECUTION",
       }))
     : preview.flatMap((month) => month.suggestions);
 
@@ -95,7 +102,7 @@ export default async function HoursPlanningPage() {
       roleCategory: row.roleCategory,
       workPackageCode: row.workPackageCode,
       activityCode: row.activityCode,
-      plannedHours: row.sourceState === "APPROVED_REMAINING" ? row.plannedHours : 0,
+      plannedHours: row.plannedHours,
     })),
     approvedEntries.map((entry) => ({
       monthKey: monthKey(entry.date),
@@ -117,23 +124,64 @@ export default async function HoursPlanningPage() {
     new Set([...Array.from(rowsByMonth.keys()), ...planActual.map((row) => row.monthKey)]),
   ).sort();
 
-  const approvedForecastHours = rows
-    .filter((row) => row.sourceState === "APPROVED_REMAINING")
-    .reduce((sum, row) => sum + row.plannedHours, 0);
+  const totalForecastHours = rows.reduce((sum, row) => sum + row.plannedHours, 0);
   const currentMonth = new Date().toISOString().slice(0, 7);
   const correctiveActions = buildCorrectiveActionPlan();
+  const approvalMonths: MonthlyPlanningApprovalMonth[] = [];
+  if (latestVersion) {
+    const grouped = new Map<
+      string,
+      {
+        totalHours: number;
+        reviewState: "DRAFT" | "REVIEWED";
+        roles: Map<string, { hours: number; detailCount: number }>;
+      }
+    >();
+    for (const allocation of latestVersion.allocations) {
+      const key = monthKey(allocation.monthStart);
+      if (key < currentMonth) continue;
+      const month = grouped.get(key) || {
+        totalHours: 0,
+        reviewState: "REVIEWED" as const,
+        roles: new Map<string, { hours: number; detailCount: number }>(),
+      };
+      month.totalHours += allocation.plannedHours;
+      if (allocation.reviewState === "DRAFT") month.reviewState = "DRAFT";
+      const role = month.roles.get(allocation.roleCategory) || { hours: 0, detailCount: 0 };
+      role.hours += allocation.plannedHours;
+      role.detailCount += allocation.forecastEntries.length;
+      month.roles.set(allocation.roleCategory, role);
+      grouped.set(key, month);
+    }
+    for (const [key, month] of Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+      approvalMonths.push({
+        monthKey: key,
+        monthLabel: new Date(`${key}-01T00:00:00.000Z`).toLocaleDateString("nl-NL", {
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        }),
+        totalHours: Math.round(month.totalHours * 100) / 100,
+        reviewState: month.reviewState,
+        roles: Array.from(month.roles.entries())
+          .map(([label, role]) => ({
+            label,
+            hours: Math.round(role.hours * 100) / 100,
+            detailCount: role.detailCount,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label, "nl")),
+      });
+    }
+  }
 
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-primary-700">
-            Operationele forecast · geen realisatie
-          </p>
-          <h1 className="mt-1 text-3xl font-bold">Urenplanning augustus 2026–augustus 2027</h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary-700">Maandelijkse urenplanning</p>
+          <h1 className="mt-1 text-3xl font-bold">Uren per functie klaarzetten en goedkeuren</h1>
           <p className="mt-2 max-w-4xl text-gray-600">
-            Stuur per maand op rol en werkpakket. Planregels staan volledig los van de urenadministratie;
-            alleen werkelijk uitgevoerd werk mag via een afzonderlijk formulier worden geregistreerd.
+            De verwachte inzet staat per maand en functie klaar. Controleer de maand en keur deze met één knop goed.
           </p>
         </div>
         <PlanningVersionActions hasVersion={Boolean(latestVersion)} />
@@ -142,11 +190,11 @@ export default async function HoursPlanningPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <div className="card">
           <p className="text-sm text-gray-500">Bronstatus</p>
-          <p className="mt-1 font-semibold text-amber-800">Gereconstrueerd — officiële RVO-XLSX ontbreekt</p>
+          <p className="mt-1 font-semibold text-emerald-800">Formeel gereconcilieerd — Model B + RVO-beschikking</p>
         </div>
         <div className="card">
-          <p className="text-sm text-gray-500">Resterende operationele bovengrens</p>
-          <p className="mt-1 text-2xl font-bold">{formatHours(approvedForecastHours)} uur</p>
+          <p className="text-sm text-gray-500">Operationele forecast</p>
+          <p className="mt-1 text-2xl font-bold">{formatHours(totalForecastHours)} uur</p>
         </div>
         <div className="card">
           <p className="text-sm text-gray-500">Opgeslagen revisie</p>
@@ -157,23 +205,29 @@ export default async function HoursPlanningPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
-        <h2 className="font-bold">Veiligheidsgrens</h2>
+      {latestVersion && approvalMonths.length > 0 && (
+        <MonthlyPlanningApprovalBoard months={approvalMonths} />
+      )}
+
+      <section className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-950">
+        <h2 className="font-bold">Forecastafspraken</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li>Dit is een werkverwachting en geen claim dat uren zijn gemaakt.</li>
-          <li>Voorgestelde data zijn spreidingshulpjes, geen uitvoeringsdata.</li>
+          <li>Iedere forecastregel bewaart verplicht een concrete datum, uitvoerder en uren.</li>
           <li>Een registratievoorstel vult alleen werkpakket, activiteit en toelichting vooraf in.</li>
-          <li>Datum, uitvoerder en werkelijk aantal uren moeten daarna handmatig worden bevestigd.</li>
-          <li>Website-uren boven de goedgekeurde hoeveelheid blijven geblokkeerd.</li>
+          <li>Werkelijk uitgevoerde datum, uitvoerder en uren worden daarna apart bevestigd.</li>
+          <li>Operationeel benodigde inzet mag ook boven een subsidiebudget worden gepland; financiële dekking en afwijking blijven apart zichtbaar.</li>
         </ul>
       </section>
 
-      <section className="space-y-6">
+      <details className="rounded-xl border border-gray-200 bg-white p-4">
+        <summary className="cursor-pointer font-semibold text-gray-800">
+          Uitgebreide planning, datums en afwijkingen bekijken
+        </summary>
+        <section className="mt-6 space-y-6">
         {displayMonthKeys.map((key) => {
           const monthRows = rowsByMonth.get(key) || [];
-          const monthTotal = monthRows
-            .filter((row) => row.sourceState === "APPROVED_REMAINING")
-            .reduce((sum, row) => sum + row.plannedHours, 0);
+          const monthTotal = monthRows.reduce((sum, row) => sum + row.plannedHours, 0);
           const monthComparisons = planActual.filter((row) => row.monthKey === key);
           const actualTotal = monthComparisons.reduce((sum, row) => sum + row.actualHours, 0);
           const dimensionalMismatchCount = monthComparisons.filter(
@@ -250,9 +304,29 @@ export default async function HoursPlanningPage() {
                       item.workPackageCode === row.workPackageCode &&
                       item.activityCode === row.activityCode,
                   );
-                  const dates =
-                    row.plannedHours > 0
-                      ? spreadPlannedHoursAcrossDates(row.monthKey, row.plannedHours)
+                  const allocation = latestVersion?.allocations.find(
+                    (item) =>
+                      monthKey(item.monthStart) === row.monthKey &&
+                      item.budgetLineKey === row.budgetLineKey &&
+                      item.workPackage.code === row.workPackageCode &&
+                      item.activity.code === row.activityCode,
+                  );
+                  const forecastEntries = allocation?.forecastEntries.length
+                    ? allocation.forecastEntries.map((entry) => ({
+                        id: entry.id,
+                        plannedDate: entry.plannedDate.toISOString().slice(0, 10),
+                        executorName: entry.executorName,
+                        plannedHours: entry.plannedHours,
+                        note: entry.note,
+                      }))
+                    : row.plannedHours > 0
+                      ? spreadPlannedHoursAcrossDates(row.monthKey, row.plannedHours).map((entry, index) => ({
+                          id: null,
+                          plannedDate: entry.date,
+                          executorName: forecastExecutorsFor(row.roleCategory)[index % forecastExecutorsFor(row.roleCategory).length],
+                          plannedHours: entry.hours,
+                          note: row.rationale,
+                        }))
                       : [];
                   const registrationUrl = `/uren/nieuw?wp=${encodeURIComponent(row.workPackageCode)}&activity=${encodeURIComponent(row.activityCode)}&description=${encodeURIComponent(`${row.label} — werkelijk uitgevoerd werk volgens operationele forecast ${row.monthKey}`)}`;
                   return (
@@ -264,17 +338,29 @@ export default async function HoursPlanningPage() {
                             <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                               {row.workPackageCode}/{row.activityCode}
                             </span>
-                            {row.sourceState === "DECISION_REQUIRED" && (
-                              <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-                                besluit vereist
-                              </span>
-                            )}
                           </div>
                           <p className="mt-1 text-sm text-gray-600">{row.rationale}</p>
-                          {dates.length > 0 && (
-                            <p className="mt-2 text-xs text-gray-500">
-                              Voorgestelde werkdagen: {dates.map((date) => `${date.date} (${formatHours(date.hours)}u)`).join(" · ")}
-                            </p>
+                          {forecastEntries.length > 0 && (
+                            <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                              <div className="grid grid-cols-[115px_1fr_80px_auto] gap-3 border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                <span>Datum</span><span>Uitvoerder</span><span className="text-right">Uren</span><span></span>
+                              </div>
+                              {forecastEntries.map((entry) => (
+                                <div key={entry.id ?? `${entry.plannedDate}-${entry.executorName}`} className="grid grid-cols-[115px_1fr_80px_auto] gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0">
+                                  <span>{entry.plannedDate}</span>
+                                  <span><span className="font-medium">{entry.executorName}</span>{entry.note && <span className="block text-xs text-gray-500">{entry.note}</span>}</span>
+                                  <span className="text-right font-semibold">{formatHours(entry.plannedHours)} u</span>
+                                  <span>{entry.id && <ForecastEntryDeleteButton id={entry.id} />}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {allocation && (
+                            <ForecastEntryForm
+                              allocationId={allocation.id}
+                              defaultDate={forecastEntries[0]?.plannedDate || `${row.monthKey}-15`}
+                              defaultExecutor={forecastExecutorsFor(row.roleCategory)[0]}
+                            />
                           )}
                         </div>
                         <div className="text-right">
@@ -285,7 +371,7 @@ export default async function HoursPlanningPage() {
                             {formatHours(comparison?.varianceHours ?? -row.plannedHours)} u
                           </p>
                           <p className="text-xs text-gray-500">forecast is geen urenboeking</p>
-                          {row.sourceState === "APPROVED_REMAINING" && row.monthKey <= currentMonth && (
+                          {row.monthKey <= currentMonth && (
                             <Link href={registrationUrl} className="mt-2 inline-block text-sm font-semibold text-primary-700 hover:underline">
                               Registratie voorbereiden →
                             </Link>
@@ -320,7 +406,8 @@ export default async function HoursPlanningPage() {
             </article>
           );
         })}
-      </section>
+        </section>
+      </details>
 
       {latestVersion && (
         <footer className="text-xs text-gray-500">

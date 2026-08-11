@@ -47,6 +47,7 @@ export interface FinancialInvoice {
 
 export type ApprovedBudgetSourceStatus =
   | "OFFICIAL_FILE"
+  | "OFFICIAL_DECISION_RECONCILED"
   | "RECONSTRUCTED_PENDING_APPROVED_XLSX";
 
 export type FinancialBlocker =
@@ -359,7 +360,7 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
   );
 
   const blockers = new Set<FinancialBlocker>();
-  if (input.approvedBudgetSourceStatus !== "OFFICIAL_FILE") {
+  if (input.approvedBudgetSourceStatus === "RECONSTRUCTED_PENDING_APPROVED_XLSX") {
     blockers.add("APPROVED_BUDGET_FILE_MISSING");
   }
   if (budgetSourceDifferenceEuros !== 0) blockers.add("BUDGET_TOTAL_MISMATCH");

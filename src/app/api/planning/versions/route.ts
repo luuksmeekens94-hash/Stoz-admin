@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import {
   assertAutomaticPlanningCreationAllowed,
   buildCorrectiveMonthlyPlan,
+  buildForecastEntrySuggestions,
 } from "@/lib/monthly-hour-planning";
 import { prisma } from "@/lib/prisma";
 
@@ -55,9 +56,9 @@ export async function POST() {
         data: {
           revision,
           status: "CONCEPT",
-          sourceStatus: "RECONSTRUCTED_PENDING_APPROVED_XLSX",
+          sourceStatus: "FORMALLY_CONFIRMED",
           sourceReference:
-            "Operationele forecast op basis van de beschikking, huidige administratie en gereconstrueerde resterende hoeveelheden. De officieel aangepaste RVO-begrotingswerkmap ontbreekt nog.",
+            "Operationele forecast op basis van de ingediende Model B-begroting, de RVO-beschikking en de actuele projectadministratie. De beschikking gaat voor waar bedragen zijn aangepast.",
           periodStart: new Date("2026-08-01T00:00:00.000Z"),
           periodEnd: new Date("2027-08-31T23:59:59.999Z"),
           createdById: session.user.id,
@@ -67,12 +68,24 @@ export async function POST() {
               budgetLineKey: suggestion.budgetLineKey,
               roleCategory: suggestion.roleCategory,
               label: suggestion.label,
-              workPackageId: workPackageByCode.get(suggestion.workPackageCode)!,
-              activityId: activityByCode.get(suggestion.activityCode)!.id,
+              workPackage: {
+                connect: { id: workPackageByCode.get(suggestion.workPackageCode)! },
+              },
+              activity: {
+                connect: { id: activityByCode.get(suggestion.activityCode)!.id },
+              },
               plannedHours: suggestion.plannedHours,
               rationale: suggestion.rationale,
               sourceState: suggestion.sourceState,
               reviewState: "DRAFT",
+              forecastEntries: {
+                create: buildForecastEntrySuggestions(suggestion).map((entry) => ({
+                  plannedDate: new Date(`${entry.plannedDate}T00:00:00.000Z`),
+                  executorName: entry.executorName,
+                  plannedHours: entry.plannedHours,
+                  note: entry.note,
+                })),
+              },
             })),
           },
         },
@@ -88,7 +101,7 @@ export async function POST() {
           afterData: {
             revision: created.revision,
             allocationCount: suggestions.length,
-            sourceStatus: "RECONSTRUCTED_PENDING_APPROVED_XLSX",
+            sourceStatus: "FORMALLY_CONFIRMED",
           },
           actorUserId: session.user.id,
         },

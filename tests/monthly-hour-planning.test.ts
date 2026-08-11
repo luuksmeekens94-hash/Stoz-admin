@@ -43,17 +43,17 @@ describe("buildCorrectiveMonthlyPlan", () => {
     ]);
   });
 
-  it("bewaart per goedgekeurde begrotingsregel exact het restant in niet-lineaire kwartieren", () => {
+  it("bewaart per operationele forecastregel exact het maandtotaal in niet-lineaire kwartieren", () => {
     const approved = buildCorrectiveMonthlyPlan()
       .flatMap((month) => month.suggestions)
-      .filter((suggestion) => suggestion.sourceState === "APPROVED_REMAINING");
+      .filter((suggestion) => suggestion.sourceState === "OPERATIONAL_FORECAST");
     const expectedTotals = {
       "Praktijkmanager en praktijkhouders · projectmanagement": 153,
-      "Praktijkmanager en praktijkhouders · implementatie": 137,
-      "Externe project- en innovatiemanager": 107.5,
+      "Praktijkmanager en praktijkhouders · implementatie": 77,
+      "Externe project- en innovatiemanager": 68.5,
       "Fysiotherapeuten Fy-fit · implementatie": 60,
       "Front- en backoffice · implementatie": 20,
-      "Praktijk Fy-fit / projectleider · opleider": 20,
+      "Praktijk Fy-fit / projectleider · opleider": 18,
     };
     const actualTotals = Object.fromEntries(
       Object.keys(expectedTotals).map((label) => [
@@ -68,6 +68,7 @@ describe("buildCorrectiveMonthlyPlan", () => {
       new Set(Object.keys(expectedTotals)),
     );
     expect(actualTotals).toEqual(expectedTotals);
+    expect(approved.reduce((sum, suggestion) => sum + suggestion.plannedHours, 0)).toBe(396.5);
     expect(approved.every((suggestion) => Number.isInteger(suggestion.plannedHours * 4))).toBe(true);
     for (const label of Object.keys(expectedTotals)) {
       const monthlyHours = approved
@@ -80,7 +81,7 @@ describe("buildCorrectiveMonthlyPlan", () => {
   it("gebruikt uitsluitend formele toekomstige WP-activiteitparen en volgt de fasering", () => {
     const approved = buildCorrectiveMonthlyPlan()
       .flatMap((month) => month.suggestions)
-      .filter((suggestion) => suggestion.sourceState === "APPROVED_REMAINING");
+      .filter((suggestion) => suggestion.sourceState === "OPERATIONAL_FORECAST");
     const allowedPairs = new Set([
       "WP1/A1.1",
       "WP3/A3.1",
@@ -144,33 +145,19 @@ describe("buildCorrectiveMonthlyPlan", () => {
     ).toBe(true);
   });
 
-  it("blokkeert website-uren in augustus en september als expliciet besluitpunt", () => {
+  it("maakt geen kunstmatig besluitpunt aan voor reeds uitgevoerde website-uren", () => {
     const website = buildCorrectiveMonthlyPlan()
       .flatMap((month) => month.suggestions)
       .filter((suggestion) => suggestion.roleCategory === "Websitebouwer");
 
-    expect(website.map((suggestion) => suggestion.monthKey)).toEqual(["2026-08", "2026-09"]);
-    expect(
-      website.every(
-        (suggestion) =>
-          suggestion.plannedHours === 0 &&
-          suggestion.sourceState === "DECISION_REQUIRED" &&
-          suggestion.canMaterialize === false,
-      ),
-    ).toBe(true);
-    expect(
-      website.every(
-        (suggestion) =>
-          suggestion.rationale.toLowerCase().includes("begrotingswijziging") &&
-          suggestion.rationale.toLowerCase().includes("niet-subsidiabel"),
-      ),
-    ).toBe(true);
+    expect(website).toEqual([]);
   });
 
   it("markeert alles expliciet als forecast met rationale en bronstatus", () => {
     const plan = buildCorrectiveMonthlyPlan();
     const suggestions = plan.flatMap((month) => month.suggestions);
     const validSourceStates = new Set([
+      "OPERATIONAL_FORECAST",
       "APPROVED_REMAINING",
       "OUTSIDE_APPROVED_QUANTITY",
       "DECISION_REQUIRED",
@@ -181,7 +168,7 @@ describe("buildCorrectiveMonthlyPlan", () => {
     expect(suggestions.every((suggestion) => validSourceStates.has(suggestion.sourceState))).toBe(true);
     expect(
       suggestions
-        .filter((suggestion) => suggestion.sourceState === "APPROVED_REMAINING")
+        .filter((suggestion) => suggestion.sourceState === "OPERATIONAL_FORECAST")
         .every(
           (suggestion) =>
             suggestion.canMaterialize === false &&

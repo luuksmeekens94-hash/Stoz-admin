@@ -10,3 +10,6 @@ tmp*.txt
 .vercel
 .hermes/
 .env*
+
+# Gegenereerde conceptverslagen en bronexports bevatten interne projectdata.
+documents/concepten/*

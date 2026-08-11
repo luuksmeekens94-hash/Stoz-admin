@@ -34,6 +34,16 @@ export interface ReconstructionRegisteredGroup {
   openHours: number;
 }
 
+export interface ReconstructionSuggestion {
+  id: string;
+  title: string;
+  actorKey: string;
+  activityId: string;
+  targetHours: number;
+  description: string;
+  sourceReference: string;
+}
+
 const sourceOptions: Array<{
   value: HistoricalReconstructionSourceType;
   label: string;
@@ -52,11 +62,13 @@ export default function HistoricalReconstructionPlanner({
   actors,
   activities,
   groups,
+  suggestions = [],
 }: {
   asOf: string;
   actors: ReconstructionActorOption[];
   activities: ReconstructionActivityOption[];
   groups: ReconstructionRegisteredGroup[];
+  suggestions?: ReconstructionSuggestion[];
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLDivElement>(null);
@@ -132,6 +144,18 @@ export default function HistoricalReconstructionPlanner({
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   }
 
+  function selectSuggestion(suggestion: ReconstructionSuggestion) {
+    selectGroup(suggestion.actorKey, suggestion.activityId);
+    const current = groupByKey.get(`${suggestion.actorKey}|${suggestion.activityId}`)?.registeredHours || 0;
+    const missing = Math.max(0, suggestion.targetHours - current);
+    setTargetHours(String(suggestion.targetHours));
+    setEntryHours(String(Math.min(24, missing)));
+    setDescription(suggestion.description);
+    setSourceType("PROJECT_OWNER_RECONSTRUCTION");
+    setSourceReference(suggestion.sourceReference);
+    setPerformedConfirmation(true);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -205,15 +229,47 @@ export default function HistoricalReconstructionPlanner({
 
   return (
     <div className="space-y-6">
-      <section className="card border-amber-200 bg-amber-50">
-        <h2 className="font-semibold text-amber-950">Wat deze reconstructie wel en niet doet</h2>
-        <ul className="mt-2 space-y-1 text-sm text-amber-900 list-disc pl-5">
-          <li>Je vergelijkt alle geregistreerde uren t/m {asOf} met een door jou onderbouwd werkelijk totaal.</li>
-          <li>De begroting wordt niet als automatisch doel gebruikt; een verschil is geen bewijs van gewerkte uren.</li>
-          <li>Iedere knop maakt maximaal één conceptregel. Datum, uren en werkzaamheden vul je zelf in.</li>
-          <li>Indienen en goedkeuren blijven aparte handelingen; subsidiabiliteit wordt niet automatisch toegekend.</li>
+      <section className="card border-blue-200 bg-blue-50">
+        <h2 className="font-semibold text-blue-950">Uren aanvullen voor de tussenrapportage</h2>
+        <ul className="mt-2 space-y-1 text-sm text-blue-900 list-disc pl-5">
+          <li>De projecteigenaar heeft bevestigd dat de voorgestelde werkzaamheden daadwerkelijk zijn uitgevoerd.</li>
+          <li>Kies een voorstel; uitvoerder, activiteit, uren en toelichting worden direct ingevuld.</li>
+          <li>Vul alleen de werkelijke uitvoeringsdatum in en maak daarna de conceptregel aan.</li>
+          <li>Conceptregels kunnen vervolgens via de gewone urencontrole worden goedgekeurd.</li>
         </ul>
       </section>
+
+      {suggestions.length > 0 && (
+        <section className="card border-blue-200">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold">Aanvulvoorstel klaarzetten</h2>
+            <p className="text-sm text-gray-600">Eén klik vult het bevestigde verschil in; jij kiest daarna de datum.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {suggestions.map((suggestion) => {
+              const current = groupByKey.get(`${suggestion.actorKey}|${suggestion.activityId}`)?.registeredHours || 0;
+              const missing = Math.max(0, suggestion.targetHours - current);
+              return (
+                <div key={suggestion.id} className="rounded-xl border border-gray-200 p-4">
+                  <h3 className="font-semibold text-gray-900">{suggestion.title}</h3>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Nu {formatHours(current)} uur · nog {formatHours(missing)} uur klaar te zetten
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-primary mt-3"
+                    disabled={missing <= 0}
+                    onClick={() => selectSuggestion(suggestion)}
+                    aria-label={suggestion.title}
+                  >
+                    {missing > 0 ? "Met één klik klaarzetten" : "Volledig aangevuld"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="card overflow-x-auto">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -441,7 +497,7 @@ export default function HistoricalReconstructionPlanner({
 
               {sourceType === "PROJECT_OWNER_RECONSTRUCTION" && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
-                  Alleen jouw reconstructie is een zwakkere bron. Deze concepturen moeten vóór rapportage extra kritisch worden beoordeeld.
+                  Bevestigd als reconstructie door de projecteigenaar. De regel blijft concept totdat de urencontrole is afgerond.
                 </div>
               )}
 
@@ -454,7 +510,6 @@ export default function HistoricalReconstructionPlanner({
                 />
                 <span>
                   Ik bevestig dat deze concrete werkzaamheden daadwerkelijk op de ingevulde datum zijn uitgevoerd.
-                  De realistische doelstand is gebaseerd op uitvoering en bronnen, niet op de wens om de begroting te halen.
                 </span>
               </label>
 

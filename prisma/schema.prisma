@@ -52,6 +52,7 @@ enum PlanningReviewState {
 }
 
 enum PlanningAllocationSourceState {
+  OPERATIONAL_FORECAST
   APPROVED_REMAINING
   OUTSIDE_APPROVED_QUANTITY
   DECISION_REQUIRED
@@ -351,10 +352,28 @@ model MonthlyPlanAllocation {
   planningVersion PlanningVersion @relation(fields: [planningVersionId], references: [id], onDelete: Cascade)
   workPackage     WorkPackage     @relation(fields: [workPackageId], references: [id])
   activity        Activity        @relation(fields: [activityId], references: [id])
+  forecastEntries ForecastEntry[]
 
   @@unique([planningVersionId, monthStart, budgetLineKey, workPackageId, activityId])
   @@index([planningVersionId])
   @@index([monthStart])
+}
+
+model ForecastEntry {
+  id           String   @id @default(cuid())
+  allocationId String
+  plannedDate  DateTime @db.Date
+  executorName String
+  plannedHours Float
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  allocation MonthlyPlanAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  @@unique([allocationId, plannedDate, executorName])
+  @@index([plannedDate])
+  @@index([executorName])
 }
 
 model AuditEvent {

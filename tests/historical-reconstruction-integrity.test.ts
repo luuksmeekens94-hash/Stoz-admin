@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildHistoricalReconstructionEntryId,
   buildHistoricalReconstructionRequestFingerprint,
@@ -7,7 +7,11 @@ import {
   parseHistoricalReconstructionProvenance,
   validateHistoricalReconstructionIntegrity,
 } from "@/lib/historical-reconstruction-integrity";
-import { isAllowedHistoricalReconstructionTransition } from "@/lib/historical-reconstruction-db";
+import {
+  HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS,
+  isAllowedHistoricalReconstructionTransition,
+  loadAndValidateHistoricalReconstruction,
+} from "@/lib/historical-reconstruction-db";
 
 const payload = {
   requestId: "0f6af396-a6f8-4bb1-90dd-208a5ad94c85",
@@ -35,6 +39,26 @@ describe("historische reconstructie-integriteit", () => {
   it("biedt een gecontroleerd herstelpad van goedgekeurd naar concept", () => {
     expect(isAllowedHistoricalReconstructionTransition("APPROVED", "DRAFT")).toBe(true);
     expect(isAllowedHistoricalReconstructionTransition("APPROVED", "SUBMITTED")).toBe(false);
+  });
+
+  it("herkent zowel canonieke als bestaande legacy-creatieprovenance", async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
+    await loadAndValidateHistoricalReconstruction(
+      { auditEvent: { findFirst } } as never,
+      { id: "entry-legacy" } as never,
+    );
+
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          action: { in: [...HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS] },
+        }),
+      }),
+    );
+    expect(HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS).toEqual([
+      "CREATED_FROM_HISTORICAL_RECONSTRUCTION",
+      "CREATED_HISTORICAL_RECONSTRUCTION",
+    ]);
   });
 
   it("accepteert alleen een exact getypeerd requestobject zonder overposting", () => {

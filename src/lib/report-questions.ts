@@ -26,6 +26,7 @@ interface QuestionSteeringInput {
   };
   participants: Array<{
     id: string;
+    category: string;
     label: string;
     questionableWorkPackageHours: number;
     signal: string;
@@ -72,6 +73,15 @@ function euros(value: number) {
     currency: "EUR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function stableQuestionKey(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export function buildReportQuestions(input: BuildReportQuestionsInput): ReportQuestion[] {
@@ -263,7 +273,7 @@ export function buildReportQuestions(input: BuildReportQuestionsInput): ReportQu
   for (const participant of input.steering.participants) {
     if (participant.signal === "OVER_BUDGET") {
       questions.unshift({
-        id: `hours-over-budget-${participant.id}`,
+        id: `hours-over-budget-${stableQuestionKey(participant.category)}`,
         section: "Financieel",
         priority: "BLOCKER",
         question: `${participant.label} staat op ${hours(participant.reportableHours || 0)} tegenover ${hours(participant.budgetHours || 0)} begroot. Welke inzet verklaart de overschrijding en onder welke goedgekeurde begrotingsregel hoort die?`,
@@ -273,7 +283,7 @@ export function buildReportQuestions(input: BuildReportQuestionsInput): ReportQu
 
     if (participant.questionableWorkPackageHours > 0) {
       questions.unshift({
-        id: `participant-classification-${participant.id}`,
+        id: `participant-classification-${stableQuestionKey(participant.category)}`,
         section: "Datakwaliteit",
         priority: "BLOCKER",
         question: `${participant.label} heeft ${hours(participant.questionableWorkPackageHours)} op werkpakketten die niet logisch aansluiten op deze begrotingsrol. Wat was de feitelijke rol en onder welke begrotingspost hoort de inzet?`,

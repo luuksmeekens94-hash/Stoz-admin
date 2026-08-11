@@ -4,7 +4,7 @@ import { buildReportQuestions } from "@/lib/report-questions";
 const steering = {
   totals: { reportableHours: 50, unapprovedPastHours: 0, futureHours: 12 },
   participants: [
-    { id: "team", label: "Fysiotherapieteam", questionableWorkPackageHours: 20, signal: "CHECK_CLASSIFICATION" as const },
+    { id: "team", category: "Fysiotherapeuten", label: "Fysiotherapieteam", questionableWorkPackageHours: 20, signal: "CHECK_CLASSIFICATION" as const },
   ],
   workPackages: [
     { code: "WP5", name: "Externe verspreiding en borging", reportableHours: 0, futureHours: 0, outsidePhaseHours: 0, signal: "MISSING_REGISTRATION" as const },
@@ -32,7 +32,7 @@ describe("buildReportQuestions", () => {
     expect(questions.some((row) => row.id === "model-d-planning")).toBe(true);
     expect(questions.some((row) => row.id === "model-d-digitised-processes")).toBe(true);
     expect(questions.some((row) => row.id === "future-hours")).toBe(true);
-    expect(questions.some((row) => row.id === "participant-classification-team")).toBe(true);
+    expect(questions.some((row) => row.id === "participant-classification-fysiotherapeuten")).toBe(true);
     expect(questions.some((row) => row.id === "missing-registration-WP5")).toBe(true);
     expect(questions.some((row) => row.id === "client-results-missing")).toBe(true);
     expect(questions.some((row) => row.id === "approved-budget-file-missing")).toBe(true);
@@ -93,6 +93,7 @@ describe("buildReportQuestions", () => {
         participants: [
           {
             id: "website",
+            category: "Websitebouwer",
             label: "Websitebouwer",
             questionableWorkPackageHours: 0,
             signal: "OVER_BUDGET" as const,
@@ -112,7 +113,7 @@ describe("buildReportQuestions", () => {
 
     expect(questions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "hours-over-budget-website", priority: "BLOCKER" }),
+        expect.objectContaining({ id: "hours-over-budget-websitebouwer", priority: "BLOCKER" }),
       ]),
     );
   });

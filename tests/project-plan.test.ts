@@ -21,7 +21,7 @@ describe("STOZ Hybride Begrip bronconfiguratie", () => {
     expect(PROJECT_STEERING_CONFIG.submittedProjectCostsEuros).toBe(80_160);
     expect(PROJECT_STEERING_CONFIG.submittedIndicativeSubsidyEuros).toBe(40_080);
     expect(PROJECT_STEERING_CONFIG.approvedBudgetSourceStatus).toBe(
-      "RECONSTRUCTED_PENDING_APPROVED_XLSX",
+      "OFFICIAL_DECISION_RECONCILED",
     );
   });
 

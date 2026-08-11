@@ -19,6 +19,7 @@ import {
   type ParticipantSignal,
   type WorkPackageSignal,
 } from "@/lib/project-steering";
+import { resolveReportQuestions } from "@/lib/report-answers";
 import { buildReportQuestions } from "@/lib/report-questions";
 import { assessWorkPackageProgress, buildCorrectiveActionPlan } from "@/lib/project-progress";
 import { isWithinReportCutoff, reportCutoffEnd, resolveReportAsOf } from "@/lib/reporting-control";
@@ -264,14 +265,23 @@ export default async function UrensturingPage() {
     vatRecoverable: false,
     therapistSurveyResponseCount,
   });
-  const blockerQuestions = reportQuestions.filter((question) => question.priority === "BLOCKER");
+  const { openQuestions, resolvedAnswers } = resolveReportQuestions(reportQuestions);
+  const blockerQuestions = openQuestions.filter((question) => question.priority === "BLOCKER");
   const questionsBySection = Array.from(
-    reportQuestions.reduce((sections, question) => {
+    openQuestions.reduce((sections, question) => {
       const existing = sections.get(question.section) || [];
       existing.push(question);
       sections.set(question.section, existing);
       return sections;
-    }, new Map<string, typeof reportQuestions>()),
+    }, new Map<string, typeof openQuestions>()),
+  );
+  const answersBySection = Array.from(
+    resolvedAnswers.reduce((sections, answer) => {
+      const existing = sections.get(answer.question.section) || [];
+      existing.push(answer);
+      sections.set(answer.question.section, existing);
+      return sections;
+    }, new Map<string, typeof resolvedAnswers>()),
   );
 
   const budgetedFinancialShare =
@@ -303,6 +313,36 @@ export default async function UrensturingPage() {
             <ReportActions asOf={asOf} />
           </div>
         </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3 print:hidden">
+        <a href="#inhoudelijk" className="card border-t-4 border-t-blue-700 transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-800">Stap 1</span>
+            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">{resolvedAnswers.length} antwoorden verwerkt</span>
+          </div>
+          <h2 className="mt-3 text-lg font-semibold">Inhoudelijk voortgangsverslag</h2>
+          <p className="mt-2 text-sm text-gray-600">Werk het Model D-concept af vanuit de bevestigde activiteiten en projectduiding.</p>
+          <span className="mt-4 inline-block font-semibold text-blue-700">Open inhoudelijk deel ↓</span>
+        </a>
+        <Link href="/uren/reconstructie" className="card border-t-4 border-t-amber-600 transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Stap 2</span>
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Uren aanvullen</span>
+          </div>
+          <h2 className="mt-3 text-lg font-semibold">Financieel voortgangsverslag</h2>
+          <p className="mt-2 text-sm text-gray-600">Vul de datum van bevestigde ontbrekende uren in en actualiseer daarna Model B.</p>
+          <span className="mt-4 inline-block font-semibold text-amber-700">Open aanvulvoorstel →</span>
+        </Link>
+        <Link href="/urenplanning" className="card border-t-4 border-t-emerald-600 transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Stap 3</span>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">Per maand</span>
+          </div>
+          <h2 className="mt-3 text-lg font-semibold">Verwachte uren goedkeuren</h2>
+          <p className="mt-2 text-sm text-gray-600">Controleer uren per functie en bevestig de maand met één knop.</p>
+          <span className="mt-4 inline-block font-semibold text-emerald-700">Open maandplanning →</span>
+        </Link>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -496,7 +536,7 @@ export default async function UrensturingPage() {
         <p className="mt-2 text-xs text-gray-500">Totaal financiële urenbasis {hours(model.totals.financialBudgetHours)} · rapportabel {hours(model.totals.financialReportableHours)} ({percentage(budgetedFinancialShare)}). De in-kind-basis van {hours(model.totals.inKindBudgetHours)} staat hier los van.</p>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+      <section id="inhoudelijk" className="scroll-mt-20 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div>
           <div className="mb-3"><p className="text-xs font-semibold uppercase tracking-wider text-primary-700">Uitvoerderscontrole</p><h2 className="text-xl font-bold">Feitelijke personen per werkpakket</h2></div>
           <div className="card divide-y divide-gray-100 p-0">
@@ -522,7 +562,7 @@ export default async function UrensturingPage() {
             <div className="card"><p className="text-xs uppercase text-gray-500">Uurregels</p><p className="mt-2 text-2xl font-bold">{hourEntries.length}</p><p className="text-sm text-gray-600">{hours(model.totals.reportableHours)} rapportageklaar</p></div>
             <div className="card"><p className="text-xs uppercase text-gray-500">Facturen</p><p className="mt-2 text-2xl font-bold">{invoices.length}</p><p className="text-sm text-gray-600">{euros(invoices.reduce((sum, invoice) => sum + invoice.amountExVat, 0))} ex. btw</p></div>
           </div>
-          <div className="mt-4 card border-amber-200 bg-amber-50"><p className="text-sm font-semibold text-amber-950">Niet automatisch afleidbaar</p><p className="mt-2 text-sm text-amber-900/80">Inhoudelijke resultaten, procesinbedding, cliëntimpact, samenwerking en knelpunten moeten door Luuk/projectteam worden bevestigd. De app maakt daar geen groene bolletjes van; die zouden vooral cosmetisch projectmanagement zijn.</p></div>
+          <div className="mt-4 card border-blue-200 bg-blue-50"><p className="text-sm font-semibold text-blue-950">Samen afwerken in Model D</p><p className="mt-2 text-sm text-blue-900/80">De geregistreerde activiteiten en eerder gegeven projectduiding staan klaar als basis. Resultaten, inbedding, cliëntimpact, samenwerking en knelpunten worden in het inhoudelijke concept verder uitgewerkt.</p></div>
         </div>
       </section>
 
@@ -622,9 +662,27 @@ export default async function UrensturingPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-        <div className="flex items-start gap-3"><span className="text-2xl">?</span><div><p className="text-xs font-semibold uppercase tracking-wider text-amber-800">RVO-dossiercheck</p><h2 className="text-xl font-bold text-amber-950">Gerichte vragen voor het voortgangsverslag</h2><p className="mt-1 text-sm text-amber-800">Eerst staan blockers en bronvragen; daarna alle verplichte inhoudelijke onderdelen uit Model D.</p></div></div>
+      <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+        <div className="flex items-start gap-3"><span className="text-2xl">✓</span><div><p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">Verwerkte projectduiding</p><h2 className="text-xl font-bold text-emerald-950">Antwoorden van 10 augustus zijn opgenomen</h2><p className="mt-1 text-sm text-emerald-800">Deze antwoorden gelden nu als projectbesluit en zijn niet langer openstaande vragen. Ze vormen de inhoudelijke basis voor het concept van RVO Model D en het financieel voortgangsverslag.</p></div></div>
         <div className="mt-5 space-y-4">
+          {answersBySection.map(([section, answers]) => (
+            <details key={section} className="rounded-xl border border-emerald-200 bg-white">
+              <summary className="cursor-pointer px-4 py-3 font-semibold text-gray-900">{section} <span className="ml-2 text-xs font-normal text-gray-500">{answers.length} verwerkt</span></summary>
+              <ol className="border-t border-emerald-100 p-4 space-y-3">
+                {answers.map((answer, index) => (
+                  <li key={answer.question.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+                    <div className="flex items-start gap-3"><span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">{index + 1}</span><div><p className="font-medium text-gray-900">{answer.question.question}</p><p className="mt-2 text-gray-800"><strong>Verwerkt antwoord:</strong> {answer.answer}</p><p className="mt-2 text-xs text-gray-500">Besluit: {answer.decidedBy} · {dateLabel(answer.decidedOn)}</p></div></div>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <section className={`rounded-2xl border p-6 ${openQuestions.length === 0 ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+        <div className="flex items-start gap-3"><span className="text-2xl">?</span><div><p className={`text-xs font-semibold uppercase tracking-wider ${openQuestions.length === 0 ? "text-emerald-800" : "text-amber-800"}`}>RVO-dossiercheck</p><h2 className={`text-xl font-bold ${openQuestions.length === 0 ? "text-emerald-950" : "text-amber-950"}`}>{openQuestions.length === 0 ? "Geen onbeantwoorde verslagvragen" : "Nog openstaande vragen voor het voortgangsverslag"}</h2><p className={`mt-1 text-sm ${openQuestions.length === 0 ? "text-emerald-800" : "text-amber-800"}`}>{openQuestions.length === 0 ? "Nieuwe vragen verschijnen alleen als de projectdata een nieuwe inhoudelijke onzekerheid oplevert." : "Alleen vragen zonder verwerkt besluit staan hier nog open."}</p></div></div>
+        {questionsBySection.length > 0 && <div className="mt-5 space-y-4">
           {questionsBySection.map(([section, questions]) => (
             <details key={section} open={questions.some((question) => question.priority === "BLOCKER")} className="rounded-xl border border-amber-200 bg-white">
               <summary className="cursor-pointer px-4 py-3 font-semibold text-gray-900">{section} <span className="ml-2 text-xs font-normal text-gray-500">{questions.length} vragen</span></summary>
@@ -637,7 +695,7 @@ export default async function UrensturingPage() {
               </ol>
             </details>
           ))}
-        </div>
+        </div>}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">

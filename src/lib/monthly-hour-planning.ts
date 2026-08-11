@@ -12,6 +12,7 @@ export type PlannedActivityCode =
   | "A6.2";
 
 export type MonthlyPlanSourceState =
+  | "OPERATIONAL_FORECAST"
   | "APPROVED_REMAINING"
   | "OUTSIDE_APPROVED_QUANTITY"
   | "DECISION_REQUIRED";
@@ -41,6 +42,13 @@ export interface ProposedPlanningDate {
   date: string;
   hours: number;
   state: "PROPOSED_DATE";
+}
+
+export interface ForecastEntrySuggestion {
+  plannedDate: string;
+  executorName: string;
+  plannedHours: number;
+  note: string;
 }
 
 export interface PlanActualPlanRow {
@@ -160,14 +168,14 @@ const APPROVED_PLAN_LINES: readonly ApprovedPlanLine[] = [
     budgetLineKey: "PRACTICE_IMPLEMENTATION",
     roleCategory: "Praktijkmanagement",
     label: "Praktijkmanager en praktijkhouders · implementatie",
-    hoursByMonth: [8, 14, 15, 15, 14, 17, 16, 10, 9, 8, 5, 3, 3],
+    hoursByMonth: [5, 8, 8, 8, 8, 10, 8, 5, 5, 4, 3, 2, 3],
   },
   {
     kind: "EXTERNAL_MANAGEMENT",
     budgetLineKey: "EXTERNAL_PROJECT_MANAGEMENT",
     roleCategory: "Extern adviseur",
     label: "Externe project- en innovatiemanager",
-    hoursByMonth: [6, 11, 12, 12, 11.5, 13, 13, 9, 8, 6, 3, 2, 1],
+    hoursByMonth: [5, 7, 8, 8, 7.5, 8, 8, 5, 4, 3, 2, 2, 1],
   },
   {
     kind: "PHYSIOTHERAPISTS",
@@ -188,7 +196,7 @@ const APPROVED_PLAN_LINES: readonly ApprovedPlanLine[] = [
     budgetLineKey: "INTERNAL_TRAINER",
     roleCategory: "Interne opleider",
     label: "Praktijk Fy-fit / projectleider · opleider",
-    hoursByMonth: [6, 8, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    hoursByMonth: [6, 7, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   },
 ];
 
@@ -278,29 +286,12 @@ export function buildCorrectiveMonthlyPlan(): CorrectiveMonthlyPlan[] {
           ...phaseCode,
           plannedHours,
           rationale: rationaleFor(phaseCode.workPackageCode, monthKey),
-          sourceState: "APPROVED_REMAINING" as const,
+          sourceState: "OPERATIONAL_FORECAST" as const,
           canMaterialize: false as const,
           registrationPreparation: "PREFILL_ONLY_AFTER_EXECUTION" as const,
         },
       ];
     });
-
-    if (monthIndex <= 1) {
-      suggestions.push({
-        monthKey,
-        budgetLineKey: "WEBSITE_BUILDER_DECISION",
-        roleCategory: "Websitebouwer",
-        label: "Websitebouwer · budgetbesluit vereist",
-        workPackageCode: "WP2",
-        activityCode: "A2.1",
-        plannedHours: 0,
-        rationale:
-          "Websitebouwer heeft 56 uur tegenover 25 uur budget; zonder formele begrotingswijziging zijn extra uren mogelijk niet-subsidiabel.",
-        sourceState: "DECISION_REQUIRED",
-        canMaterialize: false,
-        registrationPreparation: "BLOCKED_PENDING_DECISION",
-      });
-    }
 
     return { monthKey, planningState: "OPERATIONAL_FORECAST", suggestions };
   });
@@ -352,4 +343,30 @@ export function spreadPlannedHoursAcrossDates(
       state: "PROPOSED_DATE" as const,
     };
   });
+}
+
+export function forecastExecutorsFor(roleCategory: string): string[] {
+  const roleExecutors: Record<string, string> = {
+    Praktijkmanagement: "Praktijkmanagement Fy-fit",
+    "Extern adviseur": "Externe projectleiding",
+    Fysiotherapeuten: "Fysiotherapieteam Fy-fit",
+    "Front/backoffice": "Front- en backoffice Fy-fit",
+    "Interne opleider": "Interne opleider Fy-fit",
+    Websitebouwer: "Websiteleverancier",
+  };
+  return [roleExecutors[roleCategory] ?? roleCategory];
+}
+
+export function buildForecastEntrySuggestions(
+  suggestion: Pick<MonthlyPlanSuggestion, "monthKey" | "roleCategory" | "plannedHours" | "rationale">,
+): ForecastEntrySuggestion[] {
+  const executors = forecastExecutorsFor(suggestion.roleCategory);
+  return spreadPlannedHoursAcrossDates(suggestion.monthKey, suggestion.plannedHours).map(
+    (date, index) => ({
+      plannedDate: date.date,
+      executorName: executors[index % executors.length],
+      plannedHours: date.hours,
+      note: suggestion.rationale,
+    }),
+  );
 }

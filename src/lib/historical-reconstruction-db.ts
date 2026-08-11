@@ -9,6 +9,12 @@ import {
 
 export const HISTORICAL_RECONSTRUCTION_CREATE_ACTION =
   "CREATED_FROM_HISTORICAL_RECONSTRUCTION";
+export const LEGACY_HISTORICAL_RECONSTRUCTION_CREATE_ACTION =
+  "CREATED_HISTORICAL_RECONSTRUCTION";
+export const HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS = [
+  HISTORICAL_RECONSTRUCTION_CREATE_ACTION,
+  LEGACY_HISTORICAL_RECONSTRUCTION_CREATE_ACTION,
+] as const;
 
 type HistoricalReconstructionStatus = "DRAFT" | "SUBMITTED" | "APPROVED";
 
@@ -33,7 +39,7 @@ export async function loadAndValidateHistoricalReconstruction(
     where: {
       entityType: "HourEntry",
       entityId: entry.id,
-      action: HISTORICAL_RECONSTRUCTION_CREATE_ACTION,
+      action: { in: [...HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS] },
     },
     orderBy: { createdAt: "asc" },
     select: {
@@ -107,7 +113,7 @@ async function loadHistoricalReconstructionEntriesForScopes(
     where: {
       entityType: "HourEntry",
       entityId: { in: entries.map((entry) => entry.id) },
-      action: HISTORICAL_RECONSTRUCTION_CREATE_ACTION,
+      action: { in: [...HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS] },
     },
     select: { entityId: true },
   });

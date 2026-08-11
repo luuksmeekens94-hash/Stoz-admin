@@ -8,6 +8,7 @@ import HistoricalReconstructionPlanner, {
   ReconstructionActivityOption,
   ReconstructionActorOption,
   ReconstructionRegisteredGroup,
+  ReconstructionSuggestion,
 } from "@/components/HistoricalReconstructionPlanner";
 
 export const dynamic = "force-dynamic";
@@ -134,14 +135,50 @@ export default async function UrenReconstructiePage() {
     (sum, group) => sum + group.openHours,
     0,
   );
+  const trainingActivity = activities.find(
+    (activity) => activity.workPackageCode === "WP3" && activity.code === "A3.1",
+  );
+  const trainingActors = trainingActivity
+    ? actors.filter(
+        (actor) =>
+          actor.therapistId === null &&
+          budgetAllocations.some(
+            (allocation) =>
+              allocation.category === "Praktijkmanager" && allocation.userId === actor.userId,
+          ) &&
+          groups.some(
+            (group) =>
+              group.actorKey === actor.key &&
+              group.activityId === trainingActivity.id &&
+              group.registeredHours > 0,
+          ),
+      )
+    : [];
+  const trainingActor = trainingActors.length === 1 ? trainingActors[0] : null;
+  const suggestions: ReconstructionSuggestion[] =
+    trainingActor && trainingActivity
+      ? [
+          {
+            id: "interim-training-catch-up",
+            title: "Training aanvullen tot 20 uur",
+            actorKey: trainingActor.key,
+            activityId: trainingActivity.id,
+            targetHours: 20,
+            description:
+              "Voorbereiding, afstemming en uitvoering van de praktijktraining over communicatie en hybride ondersteuning.",
+            sourceReference:
+              "Besluit projecteigenaar 11 augustus 2026: deze trainingswerkzaamheden zijn daadwerkelijk uitgevoerd.",
+          },
+        ]
+      : [];
 
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Historische uren reconstrueren</h1>
+          <h1 className="text-2xl font-bold">Uren tussenrapportage aanvullen</h1>
           <p className="text-gray-600">
-            Onderbouw ontbrekende werkelijk uitgevoerde uren t/m {asOf}; niet naar de begroting toe schrijven.
+            Zet bevestigde ontbrekende uren klaar, vul de uitvoeringsdatum in en maak de conceptregel aan.
           </p>
         </div>
         <div className="flex gap-2">
@@ -172,6 +209,7 @@ export default async function UrenReconstructiePage() {
         actors={actors}
         activities={activities}
         groups={groups}
+        suggestions={suggestions}
       />
     </div>
   );
