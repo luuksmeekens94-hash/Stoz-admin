@@ -73,13 +73,14 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  hourEntries       HourEntry[]
-  magicLinks        MagicLink[]
-  sessions          Session[]
-  invoices          Invoice[]
-  budgetAllocations BudgetAllocation[]
-  surveyCampaigns   SurveyCampaign[]
-  planningVersions  PlanningVersion[]
+  hourEntries         HourEntry[]
+  magicLinks          MagicLink[]
+  sessions            Session[]
+  invoices            Invoice[]
+  budgetAllocations   BudgetAllocation[]
+  surveyCampaigns     SurveyCampaign[]
+  planningVersions    PlanningVersion[]
+  interimProposalSets InterimHourProposalSet[]
 }
 
 model Session {
@@ -104,52 +105,57 @@ model MagicLink {
 }
 
 model WorkPackage {
-  id              String                  @id @default(cuid())
-  code            String                  @unique
-  name            String
-  activities      Activity[]
-  hourEntries     HourEntry[]
-  invoices        Invoice[]
-  planAllocations MonthlyPlanAllocation[]
-  createdAt       DateTime                @default(now())
+  id                   String                  @id @default(cuid())
+  code                 String                  @unique
+  name                 String
+  activities           Activity[]
+  hourEntries          HourEntry[]
+  invoices             Invoice[]
+  planAllocations      MonthlyPlanAllocation[]
+  interimHourProposals InterimHourProposal[]
+  createdAt            DateTime                @default(now())
 }
 
 model Activity {
-  id              String                  @id @default(cuid())
-  code            String                  @unique
-  name            String
-  workPackageId   String
-  workPackage     WorkPackage             @relation(fields: [workPackageId], references: [id])
-  hourEntries     HourEntry[]
-  planAllocations MonthlyPlanAllocation[]
-  createdAt       DateTime                @default(now())
+  id                   String                  @id @default(cuid())
+  code                 String                  @unique
+  name                 String
+  workPackageId        String
+  workPackage          WorkPackage             @relation(fields: [workPackageId], references: [id])
+  hourEntries          HourEntry[]
+  planAllocations      MonthlyPlanAllocation[]
+  interimHourProposals InterimHourProposal[]
+  createdAt            DateTime                @default(now())
 }
 
 model HourEntry {
-  id            String     @id @default(cuid())
-  date          DateTime
-  hours         Float
-  description   String
-  status        HourStatus @default(DRAFT)
-  userId        String
-  workPackageId String
-  activityId    String
-  therapistId   String?
-  approvedAt    DateTime?
-  approvedBy    String?
+  id                   String     @id @default(cuid())
+  date                 DateTime
+  hours                Float
+  description          String
+  status               HourStatus @default(DRAFT)
+  userId               String
+  workPackageId        String
+  activityId           String
+  therapistId          String?
+  historicalProposalId String?
+  approvedAt           DateTime?
+  approvedBy           String?
   // IMMUTABLE - critical for RVO audit
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
-  user        User        @relation(fields: [userId], references: [id])
-  workPackage WorkPackage @relation(fields: [workPackageId], references: [id])
-  activity    Activity    @relation(fields: [activityId], references: [id])
-  therapist   Therapist?  @relation(fields: [therapistId], references: [id])
+  user               User                 @relation(fields: [userId], references: [id])
+  workPackage        WorkPackage          @relation(fields: [workPackageId], references: [id])
+  activity           Activity             @relation(fields: [activityId], references: [id])
+  therapist          Therapist?           @relation(fields: [therapistId], references: [id])
+  historicalProposal InterimHourProposal? @relation(fields: [historicalProposalId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   @@index([therapistId])
   @@index([status])
   @@index([workPackageId])
+  @@index([historicalProposalId])
 }
 
 model Invoice {
@@ -374,6 +380,50 @@ model ForecastEntry {
   @@unique([allocationId, plannedDate, executorName])
   @@index([plannedDate])
   @@index([executorName])
+}
+
+model InterimHourProposalSet {
+  id                 String   @id @default(cuid())
+  requestKey         String
+  requestFingerprint String
+  asOf               DateTime @db.Date
+  calculationVersion String
+  sourceReference    String   @db.Text
+  attestedById       String
+  attestedAt         DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  attestedBy User                  @relation(fields: [attestedById], references: [id], onDelete: Restrict)
+  proposals  InterimHourProposal[]
+
+  @@unique([attestedById, requestKey])
+  @@unique([asOf, calculationVersion])
+  @@index([asOf])
+  @@index([attestedById])
+}
+
+model InterimHourProposal {
+  id                         String   @id @default(cuid())
+  proposalSetId              String
+  budgetLineKey              String
+  title                      String
+  workPackageId              String
+  activityId                 String
+  targetQuarters             Int
+  registeredBaselineQuarters Int
+  proposedQuarters           Int
+  rationale                  String   @db.Text
+  createdAt                  DateTime @default(now())
+
+  proposalSet InterimHourProposalSet @relation(fields: [proposalSetId], references: [id], onDelete: Restrict)
+  workPackage WorkPackage            @relation(fields: [workPackageId], references: [id], onDelete: Restrict)
+  activity    Activity               @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  hourEntries HourEntry[]
+
+  @@unique([proposalSetId, budgetLineKey, workPackageId, activityId])
+  @@index([proposalSetId])
+  @@index([workPackageId])
+  @@index([activityId])
 }
 
 model AuditEvent {

@@ -16,6 +16,16 @@ export const HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS = [
   LEGACY_HISTORICAL_RECONSTRUCTION_CREATE_ACTION,
 ] as const;
 
+const INTERIM_PROPOSAL_CATEGORY_BY_KEY: Record<string, string> = {
+  PRACTICE_PROJECT_MANAGEMENT: "Praktijkmanager",
+  PRACTICE_IMPLEMENTATION: "Praktijkmanager",
+  PHYSIOTHERAPIST_IMPLEMENTATION: "Fysiotherapeuten",
+  FRONT_BACKOFFICE_IMPLEMENTATION: "Front/backoffice",
+  EXTERNAL_PROJECT_MANAGEMENT: "Extern adviseur",
+  WEBSITE_BUILDER: "Websitebouwer",
+  INTERNAL_TRAINER: "Praktijkmanager",
+};
+
 type HistoricalReconstructionStatus = "DRAFT" | "SUBMITTED" | "APPROVED";
 
 export function isAllowedHistoricalReconstructionTransition(
@@ -72,6 +82,54 @@ export async function loadAndValidateHistoricalReconstruction(
     enforceTarget: options.enforceTarget,
   });
   return { audit, provenance, registeredHours };
+}
+
+export async function validateInterimProposalTarget(
+  tx: Prisma.TransactionClient,
+  entry: Pick<HourEntry, "historicalProposalId" | "userId">,
+) {
+  if (!entry.historicalProposalId) return;
+  const proposal = await tx.interimHourProposal.findUnique({
+    where: { id: entry.historicalProposalId },
+    select: {
+      budgetLineKey: true,
+      workPackageId: true,
+      targetQuarters: true,
+      proposalSet: { select: { asOf: true } },
+    },
+  });
+  if (!proposal) {
+    throw new HistoricalReconstructionIntegrityError(
+      "Het bronvoorstel van deze reconstructieregel ontbreekt.",
+    );
+  }
+  const category = INTERIM_PROPOSAL_CATEGORY_BY_KEY[proposal.budgetLineKey];
+  if (!category) {
+    throw new HistoricalReconstructionIntegrityError(
+      "De functie van het bronvoorstel is onbekend.",
+    );
+  }
+  const allocations = await tx.budgetAllocation.findMany({
+    where: { category, userId: { not: null } },
+    select: { userId: true },
+  });
+  const userIds = Array.from(new Set(allocations.flatMap((row) => row.userId || [])));
+  if (!userIds.includes(entry.userId)) userIds.push(entry.userId);
+  const aggregate = await tx.hourEntry.aggregate({
+    where: {
+      userId: { in: userIds },
+      workPackageId: proposal.workPackageId,
+      date: { lte: reportCutoffEnd(proposal.proposalSet.asOf.toISOString().slice(0, 10)) },
+    },
+    _sum: { hours: true },
+  });
+  const registeredHours = aggregate._sum.hours || 0;
+  const targetHours = proposal.targetQuarters / 4;
+  if (registeredHours > targetHours + 0.0001) {
+    throw new HistoricalReconstructionIntegrityError(
+      "De actuele functie- en werkpakketuren overschrijden de doelstand van het bronvoorstel.",
+    );
+  }
 }
 
 export interface HistoricalReconstructionScopeKey {

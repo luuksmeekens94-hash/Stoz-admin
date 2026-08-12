@@ -11,6 +11,7 @@ import {
   historicalReconstructionEntrySnapshot,
   isAllowedHistoricalReconstructionTransition,
   loadAndValidateHistoricalReconstruction,
+  validateInterimProposalTarget,
 } from "@/lib/historical-reconstruction-db";
 import { HistoricalReconstructionIntegrityError } from "@/lib/historical-reconstruction-integrity";
 
@@ -106,6 +107,9 @@ export async function PATCH(
           throw new HistoricalReconstructionIntegrityError(
             "De registratie is geen geldige historische reconstructie.",
           );
+        }
+        if (targetStatus !== "DRAFT") {
+          await validateInterimProposalTarget(tx, current);
         }
 
         const approved = targetStatus === "APPROVED";

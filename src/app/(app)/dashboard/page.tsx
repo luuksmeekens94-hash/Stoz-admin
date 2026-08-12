@@ -1,6 +1,13 @@
 import { getSession } from "@/lib/auth";
 import { PROJECT_STEERING_CONFIG } from "@/lib/project-plan";
 import { prisma } from "@/lib/prisma";
+import InterimHoursDashboard from "@/components/InterimHoursDashboard";
+import {
+  loadInterimHoursSteering,
+  loadPreparedInterimProposalKeys,
+} from "@/lib/interim-hour-steering-db";
+import { loadMonthlyApprovalMonths } from "@/lib/monthly-planning-db";
+import { amsterdamDateKey, resolveReportAsOf } from "@/lib/reporting-control";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -23,6 +30,26 @@ export default async function DashboardPage() {
 
   const user = session.user;
   const isAdmin = user.role === "ADMIN";
+  if (isAdmin) {
+    const today = amsterdamDateKey();
+    const asOf = resolveReportAsOf({
+      today,
+      periodEnd: PROJECT_STEERING_CONFIG.reportPeriodEnd,
+    });
+    const [steering, preparedProposalKeys, months] = await Promise.all([
+      loadInterimHoursSteering(asOf),
+      loadPreparedInterimProposalKeys(asOf),
+      loadMonthlyApprovalMonths(today.slice(0, 7)),
+    ]);
+    return (
+      <InterimHoursDashboard
+        asOf={asOf}
+        steering={steering}
+        preparedProposalKeys={preparedProposalKeys}
+        months={months}
+      />
+    );
+  }
   const now = new Date();
   const whereUser = isAdmin ? {} : { userId: user.id };
 

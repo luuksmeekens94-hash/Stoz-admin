@@ -40,4 +40,51 @@ describe("MonthlyPlanningApprovalBoard", () => {
     );
     expect(refresh).toHaveBeenCalledTimes(1);
   });
+
+  it("toont bij een lege serverfout de goedkeuringsfout zonder te verversen", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      json: async () => { throw new SyntaxError("geen JSON"); },
+    } as unknown as Response);
+    render(
+      <MonthlyPlanningApprovalBoard
+        months={[{
+          monthKey: "2026-09",
+          monthLabel: "september 2026",
+          totalHours: 8,
+          reviewState: "DRAFT",
+          roles: [{ label: "Praktijkmanagement", hours: 8, detailCount: 1 }],
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /september 2026 goedkeuren/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Planmaand goedkeuren mislukt.");
+    expect(screen.queryByText(/verbindingsfout/i)).not.toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("behandelt ook een onleesbare 2xx-respons fail-closed", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => { throw new SyntaxError("geen JSON"); },
+    } as unknown as Response);
+    render(
+      <MonthlyPlanningApprovalBoard
+        months={[{
+          monthKey: "2026-09",
+          monthLabel: "september 2026",
+          totalHours: 8,
+          reviewState: "DRAFT",
+          roles: [{ label: "Praktijkmanagement", hours: 8, detailCount: 1 }],
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /september 2026 goedkeuren/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Planmaand goedkeuren mislukt.");
+    expect(refresh).not.toHaveBeenCalled();
+  });
 });

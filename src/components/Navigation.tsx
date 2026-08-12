@@ -21,15 +21,13 @@ export default function Navigation({ user }: { user: User }) {
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   const links = [
-    { href: "/dashboard", label: "Dashboard", icon: "📊" },
+    { href: "/dashboard", label: isAdmin ? "Urenoverzicht" : "Dashboard", icon: "📊" },
     { href: "/uren", label: "Uren", icon: "⏱️" },
     ...(canUploadInvoice
       ? [{ href: "/facturen", label: "Facturen", icon: "📄" }]
       : []),
     ...(isAdmin
       ? [
-          { href: "/urensturing", label: "Rapportage", icon: "🧭" },
-          { href: "/urenplanning", label: "Planning", icon: "🗓️" },
           { href: "/trainingen", label: "Trainingen", icon: "🎓" },
           { href: "/vragenlijsten", label: "Metingen", icon: "📝" },
           { href: "/clienten", label: "Cliënten", icon: "👥" },

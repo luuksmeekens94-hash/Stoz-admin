@@ -8,6 +8,7 @@ import {
   validateHistoricalReconstructionIntegrity,
 } from "@/lib/historical-reconstruction-integrity";
 import {
+  validateInterimProposalTarget,
   HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS,
   isAllowedHistoricalReconstructionTransition,
   loadAndValidateHistoricalReconstruction,
@@ -36,6 +37,38 @@ const normalized: HistoricalReconstructionPayload = {
 };
 
 describe("historische reconstructie-integriteit", () => {
+  it("blokkeert goedkeuring als een gekoppeld voorstel functiebreed al boven doel staat", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { userId: "manager-1" },
+      { userId: "manager-2" },
+    ]);
+    const aggregate = vi.fn().mockResolvedValue({ _sum: { hours: 20.25 } });
+
+    await expect(validateInterimProposalTarget(
+      {
+        interimHourProposal: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "proposal-1",
+            budgetLineKey: "INTERNAL_TRAINER",
+            workPackageId: "wp3",
+            targetQuarters: 80,
+            proposalSet: { asOf: new Date("2026-08-12T00:00:00.000Z") },
+          }),
+        },
+        budgetAllocation: { findMany },
+        hourEntry: { aggregate },
+      } as never,
+      { historicalProposalId: "proposal-1", userId: "manager-1" } as never,
+    )).rejects.toThrow(/functie.*werkpakket.*doelstand/i);
+
+    expect(aggregate).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        userId: { in: ["manager-1", "manager-2"] },
+        workPackageId: "wp3",
+      }),
+    }));
+  });
+
   it("biedt een gecontroleerd herstelpad van goedgekeurd naar concept", () => {
     expect(isAllowedHistoricalReconstructionTransition("APPROVED", "DRAFT")).toBe(true);
     expect(isAllowedHistoricalReconstructionTransition("APPROVED", "SUBMITTED")).toBe(false);

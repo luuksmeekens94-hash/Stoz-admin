@@ -23,8 +23,10 @@ function formatHours(value: number) {
 
 export default function MonthlyPlanningApprovalBoard({
   months,
+  compact = false,
 }: {
   months: MonthlyPlanningApprovalMonth[];
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [savingMonth, setSavingMonth] = useState("");
@@ -35,9 +37,13 @@ export default function MonthlyPlanningApprovalBoard({
     setError("");
     try {
       const response = await fetch(`/api/planning/months/${month.monthKey}`, { method: "PATCH" });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
-        setError(payload.error || "Planmaand goedkeuren mislukt.");
+        setError(payload?.error || "Planmaand goedkeuren mislukt.");
+        return;
+      }
+      if (!payload) {
+        setError("Planmaand goedkeuren mislukt.");
         return;
       }
       router.refresh();
@@ -52,11 +58,11 @@ export default function MonthlyPlanningApprovalBoard({
   const reviewed = months.filter((month) => month.reviewState === "REVIEWED");
 
   return (
-    <section className="card border-blue-200 bg-blue-50/40">
+    <section className={compact ? "rounded-xl border border-emerald-200 bg-emerald-50/40 p-5" : "card border-blue-200 bg-blue-50/40"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-blue-950">Maandelijks uren klaarzetten en goedkeuren</h2>
-          <p className="mt-1 text-sm text-blue-900">
+          {!compact && <h2 className="text-xl font-semibold text-blue-950">Maandelijks uren klaarzetten en goedkeuren</h2>}
+          <p className={`mt-1 text-sm ${compact ? "text-emerald-950" : "text-blue-900"}`}>
             Controleer de uren per functie. Met één knop keur je alle concrete forecastregels van de maand goed.
           </p>
         </div>
@@ -68,7 +74,7 @@ export default function MonthlyPlanningApprovalBoard({
 
       {error && <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className={`mt-5 grid gap-4 ${compact ? "xl:grid-cols-3" : "lg:grid-cols-2"}`}>
         {months.map((month) => (
           <article key={month.monthKey} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
