@@ -155,6 +155,14 @@ describe("future planning rebalance route", () => {
         }),
       }),
     });
+    expect(mocks.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        isolationLevel: "Serializable",
+        maxWait: 10_000,
+        timeout: 30_000,
+      }),
+    );
   });
 
   it("blokkeert gemengde maandstatus en plannen met gematerialiseerde DRAFT-details", async () => {

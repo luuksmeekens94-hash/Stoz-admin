@@ -363,7 +363,11 @@ export async function POST(request: Request) {
         beforeDraftHours: Math.round(beforeDraftHours * 100) / 100,
         afterDraftHours: Math.round(afterDraftHours * 100) / 100,
       };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10_000,
+      timeout: 30_000,
+    });
 
     return NextResponse.json(result);
   } catch (error) {
