@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import {
   assertAutomaticPlanningCreationAllowed,
   buildCorrectiveMonthlyPlan,
+  buildForecastExecutorCatalog,
   buildForecastEntrySuggestions,
 } from "@/lib/monthly-hour-planning";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +17,7 @@ export async function POST() {
     const workPackageCodes = Array.from(new Set(suggestions.map((row) => row.workPackageCode)));
     const activityCodes = Array.from(new Set(suggestions.map((row) => row.activityCode)));
 
-    const [workPackages, activities] = await Promise.all([
+    const [workPackages, activities, budgetRows, contributionRows] = await Promise.all([
       prisma.workPackage.findMany({
         where: { code: { in: workPackageCodes } },
         select: { id: true, code: true },
@@ -24,6 +25,19 @@ export async function POST() {
       prisma.activity.findMany({
         where: { code: { in: activityCodes } },
         select: { id: true, code: true, workPackage: { select: { code: true } } },
+      }),
+      prisma.budgetAllocation.findMany({
+        where: { userId: { not: null } },
+        select: { category: true, user: { select: { id: true, name: true, active: true } } },
+      }),
+      prisma.hourEntry.findMany({
+        where: { date: { lte: new Date() } },
+        select: {
+          userId: true,
+          user: { select: { name: true } },
+          therapist: { select: { name: true, active: true } },
+          workPackage: { select: { code: true } },
+        },
       }),
     ]);
 
@@ -45,6 +59,12 @@ export async function POST() {
       }
     }
 
+    const executorCatalog = buildForecastExecutorCatalog(budgetRows, contributionRows);
+    const suggestionPlans = suggestions.map((suggestion) => ({
+      suggestion,
+      forecastEntries: buildForecastEntrySuggestions(suggestion, executorCatalog),
+    }));
+
     let version: { id: string; revision: number } | undefined;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
@@ -63,7 +83,7 @@ export async function POST() {
           periodEnd: new Date("2027-08-31T23:59:59.999Z"),
           createdById: session.user.id,
           allocations: {
-            create: suggestions.map((suggestion) => ({
+            create: suggestionPlans.map(({ suggestion, forecastEntries }) => ({
               monthStart: new Date(`${suggestion.monthKey}-01T00:00:00.000Z`),
               budgetLineKey: suggestion.budgetLineKey,
               roleCategory: suggestion.roleCategory,
@@ -79,7 +99,7 @@ export async function POST() {
               sourceState: suggestion.sourceState,
               reviewState: "DRAFT",
               forecastEntries: {
-                create: buildForecastEntrySuggestions(suggestion).map((entry) => ({
+                create: forecastEntries.map((entry) => ({
                   plannedDate: new Date(`${entry.plannedDate}T00:00:00.000Z`),
                   executorName: entry.executorName,
                   plannedHours: entry.plannedHours,
@@ -100,7 +120,7 @@ export async function POST() {
           reason: `Conceptversie ${created.revision} aangemaakt; geen urenregistraties gegenereerd.`,
           afterData: {
             revision: created.revision,
-            allocationCount: suggestions.length,
+            allocationCount: suggestionPlans.length,
             sourceStatus: "FORMALLY_CONFIRMED",
           },
           actorUserId: session.user.id,
@@ -127,9 +147,11 @@ export async function POST() {
         ? 401
         : message === "FORBIDDEN"
           ? 403
-          : message.includes("actualbaseline")
+          : message.startsWith("Geen echte uitvoerder beschikbaar voor ")
             ? 409
-            : 500;
+            : message.includes("actualbaseline")
+              ? 409
+              : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

@@ -30,6 +30,8 @@ export default function MonthlyPlanningApprovalBoard({
 }) {
   const router = useRouter();
   const [savingMonth, setSavingMonth] = useState("");
+  const [reopeningMonth, setReopeningMonth] = useState("");
+  const [reopenReason, setReopenReason] = useState("");
   const [error, setError] = useState("");
 
   async function approveMonth(month: MonthlyPlanningApprovalMonth) {
@@ -49,6 +51,34 @@ export default function MonthlyPlanningApprovalBoard({
       router.refresh();
     } catch {
       setError("Verbindingsfout bij het goedkeuren van de planmaand.");
+    } finally {
+      setSavingMonth("");
+    }
+  }
+
+  async function reopenMonth(month: MonthlyPlanningApprovalMonth) {
+    if (reopenReason.trim().length < 10) {
+      setError("Geef een concrete correctiereden van minimaal 10 tekens.");
+      return;
+    }
+    setSavingMonth(month.monthKey);
+    setError("");
+    try {
+      const response = await fetch(`/api/planning/months/${month.monthKey}/reopen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reopenReason.trim() }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok || !payload) {
+        setError(payload?.error || "Planmaand heropenen mislukt.");
+        return;
+      }
+      setReopeningMonth("");
+      setReopenReason("");
+      router.refresh();
+    } catch {
+      setError("Verbindingsfout bij het heropenen van de planmaand.");
     } finally {
       setSavingMonth("");
     }
@@ -103,19 +133,44 @@ export default function MonthlyPlanningApprovalBoard({
               ))}
             </div>
 
-            <button
-              type="button"
-              className="btn-primary mt-4 w-full"
-              disabled={month.reviewState === "REVIEWED" || savingMonth === month.monthKey}
-              onClick={() => approveMonth(month)}
-              aria-label={`${month.monthLabel} goedkeuren`}
-            >
-              {month.reviewState === "REVIEWED"
-                ? "Maand goedgekeurd"
-                : savingMonth === month.monthKey
-                  ? "Goedkeuren…"
-                  : "Deze maand goedkeuren"}
-            </button>
+            {month.reviewState === "DRAFT" ? (
+              <button
+                type="button"
+                className="btn-primary mt-4 w-full"
+                disabled={savingMonth === month.monthKey}
+                onClick={() => approveMonth(month)}
+                aria-label={`${month.monthLabel} goedkeuren`}
+              >
+                {savingMonth === month.monthKey ? "Goedkeuren…" : "Deze maand goedkeuren"}
+              </button>
+            ) : reopeningMonth === month.monthKey ? (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <label className="text-xs font-semibold text-amber-950" htmlFor={`reopen-${month.monthKey}`}>
+                  Reden voor correctie {month.monthLabel}
+                </label>
+                <textarea
+                  id={`reopen-${month.monthKey}`}
+                  className="input mt-1"
+                  rows={2}
+                  minLength={10}
+                  maxLength={500}
+                  value={reopenReason}
+                  onChange={(event) => setReopenReason(event.target.value)}
+                />
+                <div className="mt-2 flex gap-2">
+                  <button type="button" className="btn-primary" disabled={savingMonth === month.monthKey} onClick={() => reopenMonth(month)} aria-label={`${month.monthLabel} heropenen`}>
+                    {savingMonth === month.monthKey ? "Heropenen…" : "Heropenen voor correctie"}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={() => { setReopeningMonth(""); setReopenReason(""); }}>
+                    Annuleren
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="btn-secondary mt-4 w-full" onClick={() => { setReopeningMonth(month.monthKey); setReopenReason(""); setError(""); }} aria-label={`${month.monthLabel} corrigeren`}>
+                Maand corrigeren
+              </button>
+            )}
           </article>
         ))}
       </div>

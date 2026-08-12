@@ -18,7 +18,7 @@ import { amsterdamDateKey, resolveReportAsOf } from "@/lib/reporting-control";
 import { PROJECT_STEERING_CONFIG } from "@/lib/project-plan";
 
 const SOURCE_REFERENCE =
-  "Gedelegeerde projecteigenaar-inschatting 12 augustus 2026: 450 uur als niet-lineaire tussenstand; ontwikkeling voorbelast en implementatie, borging en evaluatie zwaarder in de tweede helft.";
+  "Gedelegeerde projecteigenaar-herijking 12 augustus 2026: 450 uur als niet-lineaire tussenstand; reeds gestarte implementatie historisch, monitoring en kennisdeling uitsluitend in toekomstige planmaanden.";
 
 function quarters(hours: number) {
   const value = hours * 4;

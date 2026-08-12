@@ -145,6 +145,12 @@ export async function PATCH(
       { status: 409 },
     );
   }
+  if (entry.sourceForecastEntryId) {
+    return NextResponse.json(
+      { error: "Gebruik de afgeschermde planningurenroute voor wijzigingen en statusovergangen." },
+      { status: 409 },
+    );
+  }
 
   // Approved rows are corrected, never silently overwritten or deleted.
   if (entry.status === "APPROVED" && body.correctionReason) {
@@ -506,6 +512,12 @@ export async function DELETE(
   if (reconstructionAudit) {
     return NextResponse.json(
       { error: "Gebruik de afgeschermde reconstructieroute voor deze registratie." },
+      { status: 409 },
+    );
+  }
+  if (entry.sourceForecastEntryId) {
+    return NextResponse.json(
+      { error: "Een concept uit goedgekeurde planning kan worden gecorrigeerd, maar niet verwijderd." },
       { status: 409 },
     );
   }

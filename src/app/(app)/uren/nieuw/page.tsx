@@ -3,15 +3,34 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import HourForm from "@/components/HourForm";
 import { amsterdamDateKey } from "@/lib/reporting-control";
+import PlannedHourMaterializer from "@/components/PlannedHourMaterializer";
+import { loadPlannedHourPrefill, PlannedHourPrefillError } from "@/lib/planned-hour-prefill";
 
 export default async function NieuwUrenPage({
   searchParams,
 }: {
-  searchParams: Promise<{ wp?: string; activity?: string; description?: string }>;
+  searchParams: Promise<{ wp?: string; activity?: string; description?: string; forecastEntryId?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/auth/login");
   const params = await searchParams;
+
+  if (params.forecastEntryId) {
+    if (session.user.role !== "ADMIN") redirect("/uren");
+    try {
+      const prefill = await loadPlannedHourPrefill(params.forecastEntryId);
+      return (
+        <div>
+          <h1 className="mb-2 text-2xl font-bold">Gepland werk registreren</h1>
+          <p className="mb-6 text-gray-600">Controleer de planning aan de hand van wat werkelijk is uitgevoerd.</p>
+          <PlannedHourMaterializer {...prefill} today={amsterdamDateKey(new Date())} />
+        </div>
+      );
+    } catch (error) {
+      const message = error instanceof PlannedHourPrefillError ? error.message : "De geplande regel kon niet worden geladen.";
+      return <div className="card border-red-200 bg-red-50 text-red-900" role="alert">{message}</div>;
+    }
+  }
 
   const [workPackages, allUsers, therapists] = await Promise.all([
     prisma.workPackage.findMany({

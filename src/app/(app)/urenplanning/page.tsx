@@ -75,6 +75,16 @@ export default async function HoursPlanningPage() {
       select: { userId: true, category: true },
     }),
   ]);
+  const hasFutureRebalance = latestVersion
+    ? Boolean(await prisma.auditEvent.findFirst({
+        where: {
+          entityType: "PlanningVersion",
+          entityId: `${latestVersion.id}:future-rebalance-2026-08-v2`,
+          action: "REBALANCED_FUTURE_OPERATIONAL_FORECAST",
+        },
+        select: { id: true },
+      }))
+    : false;
 
   const preview = buildCorrectiveMonthlyPlan();
   const rows: MonthlyPlanSuggestion[] = latestVersion
@@ -184,7 +194,10 @@ export default async function HoursPlanningPage() {
             De verwachte inzet staat per maand en functie klaar. Controleer de maand en keur deze met één knop goed.
           </p>
         </div>
-        <PlanningVersionActions hasVersion={Boolean(latestVersion)} />
+        <PlanningVersionActions
+          hasVersion={Boolean(latestVersion)}
+          hasFutureRebalance={hasFutureRebalance}
+        />
       </header>
 
       <section className="grid gap-4 md:grid-cols-3">

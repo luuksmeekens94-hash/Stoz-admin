@@ -87,4 +87,33 @@ describe("MonthlyPlanningApprovalBoard", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Planmaand goedkeuren mislukt.");
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it("laat een goedgekeurde maand met een concrete reden auditbaar heropenen", async () => {
+    render(
+      <MonthlyPlanningApprovalBoard
+        months={[{
+          monthKey: "2026-08",
+          monthLabel: "augustus 2026",
+          totalHours: 26,
+          reviewState: "REVIEWED",
+          roles: [{ label: "Praktijkmanagement", hours: 13, detailCount: 4 }],
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /augustus 2026 corrigeren/i }));
+    fireEvent.change(screen.getByLabelText(/reden voor correctie augustus 2026/i), {
+      target: { value: "Verdeling over personen en werkzaamheden corrigeren." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /augustus 2026 heropenen/i }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      "/api/planning/months/2026-08/reopen",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ reason: "Verdeling over personen en werkzaamheden corrigeren." }),
+      }),
+    ));
+    expect(refresh).toHaveBeenCalledOnce();
+  });
 });

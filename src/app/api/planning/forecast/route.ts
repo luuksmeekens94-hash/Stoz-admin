@@ -85,6 +85,7 @@ export async function POST(request: Request) {
             plannedDate,
             executorName: { equals: executorName, mode: "insensitive" },
           },
+          include: { materializedHourEntry: { select: { id: true } } },
         }),
         tx.forecastEntry.aggregate({
           where: {
@@ -94,6 +95,9 @@ export async function POST(request: Request) {
           _sum: { plannedHours: true },
         }),
       ]);
+      if (existing?.materializedHourEntry) {
+        throw new Error("FORECAST_ENTRY_MATERIALIZED");
+      }
       const dailyExecutorHours = dailyAggregate._sum.plannedHours ?? 0;
       if (dailyExecutorHours + plannedHours > 24) {
         throw new Error("FORECAST_DAILY_EXECUTOR_LIMIT");
@@ -149,7 +153,7 @@ export async function POST(request: Request) {
           : message === "FORECAST_ALLOCATION_NOT_FOUND" ? 404
             : message === "FORECAST_DATE_OUTSIDE_PERIOD" || message === "FORECAST_DATE_OUTSIDE_MONTH" ? 409
               : message === "FORECAST_VERSION_LOCKED" || message === "FORECAST_MONTH_REVIEWED" ? 409
-              : message === "FORECAST_DAILY_EXECUTOR_LIMIT" ? 409
+              : message === "FORECAST_DAILY_EXECUTOR_LIMIT" || message === "FORECAST_ENTRY_MATERIALIZED" ? 409
                 : message === "FORECAST_TOTAL_INTEGRITY_ERROR" ? 409
                 : error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2034" || error.code === "P2002") ? 409
                 : 500;
@@ -159,7 +163,8 @@ export async function POST(request: Request) {
           : message === "FORECAST_ALLOCATION_NOT_FOUND" ? "Forecastregel niet gevonden."
             : message === "FORECAST_VERSION_LOCKED" ? "Deze planningversie is niet meer wijzigbaar."
               : message === "FORECAST_MONTH_REVIEWED" ? "Deze planmaand is goedgekeurd en kan niet meer worden gewijzigd."
-            : message === "FORECAST_DAILY_EXECUTOR_LIMIT" ? "Per uitvoerder kan maximaal 24 uur op één datum worden gepland."
+            : message === "FORECAST_ENTRY_MATERIALIZED" ? "Deze forecastregel is al als urenconcept geregistreerd en kan niet meer worden gewijzigd."
+              : message === "FORECAST_DAILY_EXECUTOR_LIMIT" ? "Per uitvoerder kan maximaal 24 uur op één datum worden gepland."
               : message === "FORECAST_TOTAL_INTEGRITY_ERROR" ? "Forecasttotaal is inconsistent; wijziging is geblokkeerd."
               : status === 409 ? "De forecast is gelijktijdig gewijzigd; vernieuw de pagina en probeer opnieuw."
                 : "Forecast opslaan mislukt.";

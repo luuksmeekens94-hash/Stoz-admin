@@ -15,6 +15,7 @@ interface Entry {
   workPackage: { code: string; name: string };
   activity: { code: string; name: string };
   therapist?: { id: string; name: string } | null;
+  sourceForecastEntryId?: string | null;
   isHistoricalReconstruction: boolean;
   reconstructionReview?: {
     integrity: "VALID" | "INVALID";
@@ -23,6 +24,20 @@ interface Entry {
     sourceType: string | null;
     sourceReference: string | null;
     performedConfirmation: boolean;
+    auditHistory: Array<{
+      action: string;
+      reason: string;
+      actor: string;
+      createdAt: string;
+    }>;
+  } | null;
+  planningReview?: {
+    integrity: "VALID" | "INVALID";
+    sourceReference: string | null;
+    performedConfirmation: boolean;
+    plannedDate: string | null;
+    plannedExecutorName: string | null;
+    plannedHours: number | null;
     auditHistory: Array<{
       action: string;
       reason: string;
@@ -75,7 +90,7 @@ export default function HoursList({
   const [error, setError] = useState<string | null>(null);
 
   const selectableEntries = entries.filter(
-    (entry) => !entry.isHistoricalReconstruction,
+    (entry) => !entry.isHistoricalReconstruction && !entry.sourceForecastEntryId,
   );
   const selectedEntries = entries.filter((entry) => selected.has(entry.id));
   const allSelectableSelected =
@@ -83,7 +98,7 @@ export default function HoursList({
     selectableEntries.every((entry) => selected.has(entry.id));
 
   function toggleSelect(entry: Entry) {
-    if (entry.isHistoricalReconstruction) return;
+    if (entry.isHistoricalReconstruction || entry.sourceForecastEntryId) return;
     const next = new Set(selected);
     if (next.has(entry.id)) next.delete(entry.id);
     else next.add(entry.id);
@@ -152,6 +167,49 @@ export default function HoursList({
       return;
     }
     await updateStatus(entry.id, "APPROVED", true);
+  }
+
+  async function updatePlanningHourStatus(
+    entry: Entry,
+    action: "submit" | "approve" | "return_to_draft",
+  ) {
+    if (entry.planningReview?.integrity !== "VALID") {
+      setError("De bron- en uitvoeringsinformatie van dit planninguur is ongeldig of onvolledig.");
+      return;
+    }
+    if (
+      action === "approve" &&
+      !confirm("Heb je de bronverwijzing, werkelijke uitvoering en volledige auditgeschiedenis beoordeeld?")
+    ) return;
+    const labels = {
+      submit: "Reden voor indienen (minimaal 15 tekens):",
+      approve: "Beoordelingsreden voor goedkeuring (minimaal 15 tekens):",
+      return_to_draft: "Reden voor terugzetten naar concept (minimaal 15 tekens):",
+    };
+    const reason = prompt(labels[action])?.trim() || "";
+    if (reason.length < 15) {
+      setError("Geef een concrete reden van minimaal 15 tekens.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/hours/planning/entries/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          reason,
+          ...(action === "approve" ? { reviewConfirmation: true } : {}),
+        }),
+      });
+      await assertSuccessfulResponse(response, "De planningurenstatus kon niet worden bijgewerkt.");
+      router.refresh();
+    } catch (caught) {
+      setError(errorMessage(caught, "De planningurenstatus kon niet worden bijgewerkt."));
+    } finally {
+      setLoading(false);
+    }
   }
 
   function startEdit(entry: Entry) {
@@ -296,7 +354,7 @@ export default function HoursList({
           <tbody>
             {entries.map((entry) => {
               const displayName = entry.therapist ? entry.therapist.name : entry.user.name;
-              const canSelect = !entry.isHistoricalReconstruction;
+              const canSelect = !entry.isHistoricalReconstruction && !entry.sourceForecastEntryId;
               const canManageDraft =
                 entry.status === "DRAFT" &&
                 (isAdmin || entry.user.id === currentUserId);
@@ -312,7 +370,9 @@ export default function HoursList({
                       aria-label={
                         entry.isHistoricalReconstruction
                           ? `Selecteer historische reconstructie van ${displayName}`
-                          : `Selecteer urenregel van ${displayName}`
+                          : entry.sourceForecastEntryId
+                            ? `Selecteer planninguur van ${displayName}`
+                            : `Selecteer urenregel van ${displayName}`
                       }
                     />
                   </td>
@@ -329,6 +389,11 @@ export default function HoursList({
                     {entry.isHistoricalReconstruction && (
                       <span className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
                         Historische reconstructie
+                      </span>
+                    )}
+                    {entry.sourceForecastEntryId && (
+                      <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-800">
+                        Uit goedgekeurde planning
                       </span>
                     )}
                     {isAdmin && entry.isHistoricalReconstruction && entry.reconstructionReview && (
@@ -391,6 +456,47 @@ export default function HoursList({
                         </div>
                       </details>
                     )}
+                    {isAdmin && entry.sourceForecastEntryId && entry.planningReview && (
+                      <details className="mt-2 min-w-72 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-gray-800">
+                        <summary className="cursor-pointer font-semibold text-blue-900">
+                          Bron en uitvoering beoordelen
+                        </summary>
+                        {entry.planningReview.integrity !== "VALID" ? (
+                          <p role="alert" className="mt-2 font-semibold text-red-700">
+                            Bron- of auditintegriteit ongeldig — indienen en goedkeuren zijn geblokkeerd.
+                          </p>
+                        ) : (
+                          <dl className="mt-2 grid gap-1">
+                            <div>
+                              <dt className="font-semibold">Goedgekeurde planning</dt>
+                              <dd>
+                                {entry.planningReview.plannedExecutorName} · {entry.planningReview.plannedDate} ·{" "}
+                                {entry.planningReview.plannedHours?.toLocaleString("nl-NL")} uur
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold">Actuele bronverwijzing</dt>
+                              <dd className="whitespace-normal break-words">{entry.planningReview.sourceReference}</dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold">Werkelijke uitvoering bevestigd</dt>
+                              <dd>{entry.planningReview.performedConfirmation ? "Ja" : "Nee"}</dd>
+                            </div>
+                          </dl>
+                        )}
+                        <div className="mt-2 border-t border-blue-200 pt-2">
+                          <p className="font-semibold">Auditgeschiedenis</p>
+                          <ol className="mt-1 space-y-1">
+                            {entry.planningReview.auditHistory.map((audit, index) => (
+                              <li key={`${audit.createdAt}-${audit.action}-${index}`}>
+                                {new Date(audit.createdAt).toLocaleString("nl-NL", { timeZone: "Europe/Amsterdam" })}
+                                {" — "}{audit.action} · {audit.actor}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      </details>
+                    )}
                   </td>
                   <td className="py-2 px-2 text-right font-medium">
                     {editingId === entry.id ? (
@@ -433,7 +539,28 @@ export default function HoursList({
                   </td>
                   <td className="py-2 px-2 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      {canManageDraft && (
+                      {canManageDraft && entry.sourceForecastEntryId && isAdmin && (
+                        <>
+                          <Link
+                            href={`/uren/${entry.id}/corrigeren`}
+                            className={`${ROW_ACTION_CLASS} text-amber-700 hover:text-amber-900`}
+                            title="Planninguur corrigeren"
+                            aria-label={`Planninguur corrigeren voor ${displayName}`}
+                          >
+                            🛠️
+                          </Link>
+                          <button
+                            onClick={() => updatePlanningHourStatus(entry, "submit")}
+                            disabled={loading || entry.planningReview?.integrity !== "VALID"}
+                            className={`${ROW_ACTION_CLASS} text-primary-600 hover:text-primary-800`}
+                            title="Indienen planninguur"
+                            aria-label={`Indienen planninguur van ${displayName}`}
+                          >
+                            📤
+                          </button>
+                        </>
+                      )}
+                      {canManageDraft && !entry.sourceForecastEntryId && (
                         <>
                           {!entry.isHistoricalReconstruction && (
                             <button
@@ -449,11 +576,7 @@ export default function HoursList({
                           {(!entry.isHistoricalReconstruction || isAdmin) && (
                             <button
                               onClick={() =>
-                                updateStatus(
-                                  entry.id,
-                                  "SUBMITTED",
-                                  entry.isHistoricalReconstruction,
-                                )
+                                updateStatus(entry.id, "SUBMITTED", entry.isHistoricalReconstruction)
                               }
                               disabled={
                                 loading ||
@@ -491,7 +614,28 @@ export default function HoursList({
                           )}
                         </>
                       )}
-                      {isAdmin && entry.status === "SUBMITTED" && (
+                      {isAdmin && entry.status === "SUBMITTED" && entry.sourceForecastEntryId ? (
+                        <>
+                          <button
+                            onClick={() => updatePlanningHourStatus(entry, "approve")}
+                            disabled={loading || entry.planningReview?.integrity !== "VALID"}
+                            className={`${ROW_ACTION_CLASS} text-green-600 hover:text-green-800`}
+                            title="Beoordelen en goedkeuren planninguur"
+                            aria-label={`Beoordelen en goedkeuren planninguur voor ${displayName}`}
+                          >
+                            ✅
+                          </button>
+                          <button
+                            onClick={() => updatePlanningHourStatus(entry, "return_to_draft")}
+                            disabled={loading || entry.planningReview?.integrity !== "VALID"}
+                            className={`${ROW_ACTION_CLASS} text-gray-600 hover:text-gray-800`}
+                            title="Planninguur terugzetten naar concept"
+                            aria-label={`Planninguur terugzetten naar concept voor ${displayName}`}
+                          >
+                            ↩️
+                          </button>
+                        </>
+                      ) : isAdmin && entry.status === "SUBMITTED" && (
                         <>
                           <button
                             onClick={() =>
@@ -520,11 +664,7 @@ export default function HoursList({
                           </button>
                           <button
                             onClick={() =>
-                              updateStatus(
-                                entry.id,
-                                "DRAFT",
-                                entry.isHistoricalReconstruction,
-                              )
+                              updateStatus(entry.id, "DRAFT", entry.isHistoricalReconstruction)
                             }
                             disabled={loading}
                             className={`${ROW_ACTION_CLASS} text-gray-600 hover:text-gray-800`}
@@ -539,8 +679,12 @@ export default function HoursList({
                         <Link
                           href={`/uren/${entry.id}/corrigeren`}
                           className={`${ROW_ACTION_CLASS} text-amber-700 hover:text-amber-900`}
-                          title="Auditbare correctie"
-                          aria-label={`Auditbare correctie voor ${displayName}`}
+                          title={entry.sourceForecastEntryId ? "Planninguur corrigeren" : "Auditbare correctie"}
+                          aria-label={
+                            entry.sourceForecastEntryId
+                              ? `Planninguur corrigeren voor ${displayName}`
+                              : `Auditbare correctie voor ${displayName}`
+                          }
                         >
                           🛠️
                         </Link>
@@ -548,11 +692,7 @@ export default function HoursList({
                       {isAdmin && entry.status === "APPROVED" && entry.isHistoricalReconstruction && (
                         <button
                           onClick={() =>
-                              updateStatus(
-                                entry.id,
-                                "DRAFT",
-                                entry.isHistoricalReconstruction,
-                              )
+                              updateStatus(entry.id, "DRAFT", entry.isHistoricalReconstruction)
                             }
                           disabled={loading}
                           className={`${ROW_ACTION_CLASS} text-amber-700 hover:text-amber-900`}

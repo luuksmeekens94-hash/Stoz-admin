@@ -33,7 +33,7 @@ describe("InterimHoursDashboard", () => {
     vi.stubGlobal("crypto", { randomUUID: () => "123e4567-e89b-42d3-a456-426614174000" });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ proposalCount: 4, proposalHours: 45 }),
+      json: async () => ({ proposalCount: 3, proposalHours: 45 }),
     }));
   });
 
@@ -65,7 +65,7 @@ describe("InterimHoursDashboard", () => {
     expect(screen.queryByText(/training aanvullen tot 20 uur/i)).not.toBeInTheDocument();
   });
 
-  it("zet alle vier ontbrekende scopes met één knop als voorstelset klaar", async () => {
+  it("zet de drie verantwoorde historische aanvullingen met één knop als voorstelset klaar", async () => {
     render(
       <InterimHoursDashboard
         asOf="2026-08-12"
@@ -75,7 +75,7 @@ describe("InterimHoursDashboard", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /alle 4 aanvullingen klaarzetten/i }));
+    fireEvent.click(screen.getByRole("button", { name: /alle 3 aanvullingen klaarzetten/i }));
 
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(
       "/api/hours/reconstruction/proposals",
@@ -84,7 +84,7 @@ describe("InterimHoursDashboard", () => {
         headers: { "Content-Type": "application/json" },
       }),
     ));
-    expect(await screen.findByRole("status")).toHaveTextContent("45 uur verdeeld over 4 aanvullingen staat klaar");
+    expect(await screen.findByRole("status")).toHaveTextContent("45 uur verdeeld over 3 aanvullingen staat klaar");
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
@@ -120,7 +120,7 @@ describe("InterimHoursDashboard", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /alle 4 aanvullingen klaarzetten/i }));
+    fireEvent.click(screen.getByRole("button", { name: /alle 3 aanvullingen klaarzetten/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "De aanvullingen konden niet worden klaargezet.",

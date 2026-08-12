@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CATEGORY_USER_EMAILS } from "@/lib/project-plan";
 import { buildInterimHoursSteering } from "@/lib/interim-hour-steering";
 
-export const INTERIM_CALCULATION_VERSION = "phase-estimate-2026-08-v1";
+export const INTERIM_CALCULATION_VERSION = "phase-estimate-2026-08-v2";
 export const INTERIM_PROPOSAL_CREATE_ACTION = "CREATED_INTERIM_CATCH_UP_PROPOSAL_SET";
 
 const interimCategoryByEmail = new Map(

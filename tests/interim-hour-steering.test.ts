@@ -63,16 +63,13 @@ describe("realistische STOZ-tussenstand", () => {
       differenceHours: -16,
       state: "ABOVE_TARGET",
     });
-    expect(steering.workPackages.find((row) => row.code === "WP5")).toMatchObject({
-      targetHours: 8,
+    expect(steering.workPackages.find((row) => row.code === "WP4")).toMatchObject({
+      targetHours: 20,
       currentHours: 0,
-      differenceHours: 8,
+      differenceHours: 20,
     });
-    expect(steering.workPackages.find((row) => row.code === "WP6")).toMatchObject({
-      targetHours: 12,
-      currentHours: 0,
-      differenceHours: 12,
-    });
+    expect(steering.workPackages.find((row) => row.code === "WP5")?.targetHours).toBe(0);
+    expect(steering.workPackages.find((row) => row.code === "WP6")?.targetHours).toBe(0);
   });
 
   it("maakt alleen ontbrekende rol/WP-scopes klaar en laat overschrijdingen niet compenseren", () => {
@@ -80,8 +77,7 @@ describe("realistische STOZ-tussenstand", () => {
 
     expect(steering.proposals.map((row) => [row.budgetLineKey, row.workPackageCode, row.proposedHours])).toEqual([
       ["PRACTICE_IMPLEMENTATION", "WP2", 7],
-      ["PRACTICE_IMPLEMENTATION", "WP5", 8],
-      ["PRACTICE_IMPLEMENTATION", "WP6", 12],
+      ["PRACTICE_IMPLEMENTATION", "WP4", 20],
       ["INTERNAL_TRAINER", "WP3", 18],
     ]);
     expect(steering.proposals.reduce((sum, row) => sum + row.proposedHours, 0)).toBe(45);

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   assertAutomaticPlanningCreationAllowed,
   buildCorrectiveMonthlyPlan,
+  buildForecastExecutorCatalog,
+  buildForecastEntrySuggestions,
+  buildRebalancedFutureMonthlyPlan,
   comparePlanActual,
   findActualOnlyComparisons,
   findMonthlyPlan,
@@ -221,5 +224,96 @@ describe("buildCorrectiveMonthlyPlan", () => {
     expect(findMonthlyPlan("2027-03")?.monthKey).toBe("2027-03");
     expect(findMonthlyPlan("2026-07")).toBeUndefined();
     expect(findMonthlyPlan("2027-09")).toBeUndefined();
+  });
+
+  it("herijkt uitsluitend nog niet goedgekeurde maanden en bewaart augustus exact", () => {
+    const originalAugust = findMonthlyPlan("2026-08")!;
+    const rebalanced = buildRebalancedFutureMonthlyPlan();
+
+    expect(rebalanced.map((month) => month.monthKey)).toEqual([
+      "2026-09", "2026-10", "2026-11", "2026-12", "2027-01", "2027-02",
+      "2027-03", "2027-04", "2027-05", "2027-06", "2027-07", "2027-08",
+    ]);
+    expect(rebalanced.some((month) => month.monthKey === originalAugust.monthKey)).toBe(false);
+    expect(originalAugust.suggestions.reduce((sum, row) => sum + row.plannedHours, 0)).toBe(26);
+  });
+
+  it("vermindert projectmanagement en externe inzet ongelijk en verschuift gewicht naar implementatie, monitoring en kennisdeling", () => {
+    const original = buildCorrectiveMonthlyPlan().filter((month) => month.monthKey >= "2026-09");
+    const revised = buildRebalancedFutureMonthlyPlan();
+    const sum = (rows: typeof revised, predicate: (row: (typeof revised)[number]["suggestions"][number]) => boolean) =>
+      rows.flatMap((month) => month.suggestions).filter(predicate).reduce((total, row) => total + row.plannedHours, 0);
+
+    expect(sum(revised, (row) => row.budgetLineKey === "PRACTICE_PROJECT_MANAGEMENT"))
+      .toBeLessThan(sum(original, (row) => row.budgetLineKey === "PRACTICE_PROJECT_MANAGEMENT"));
+    expect(sum(revised, (row) => row.budgetLineKey === "EXTERNAL_PROJECT_MANAGEMENT"))
+      .toBeLessThan(sum(original, (row) => row.budgetLineKey === "EXTERNAL_PROJECT_MANAGEMENT"));
+    expect(sum(revised, (row) => row.budgetLineKey === "PRACTICE_IMPLEMENTATION"))
+      .toBeGreaterThan(sum(original, (row) => row.budgetLineKey === "PRACTICE_IMPLEMENTATION"));
+    expect(sum(revised, (row) => row.workPackageCode === "WP4")).toBeGreaterThan(0);
+    expect(sum(revised, (row) => row.workPackageCode === "WP5")).toBeGreaterThan(0);
+    expect(sum(revised, (row) => row.workPackageCode === "WP6")).toBeGreaterThan(0);
+
+    const pmMonths = revised.flatMap((month) => month.suggestions)
+      .filter((row) => row.budgetLineKey === "PRACTICE_PROJECT_MANAGEMENT")
+      .map((row) => row.plannedHours);
+    expect(new Set(pmMonths).size).toBeGreaterThan(4);
+    expect(pmMonths.every((hours) => hours !== 325 / 12)).toBe(true);
+  });
+
+  it("plant details op maandag/donderdag en incidenteel woensdag met concrete personen en werkzaamheden", () => {
+    const catalog = {
+      Praktijkmanagement: ["Heidi Staring", "Marion Brouwer", "Sjoerd Hendriks"],
+      "Extern adviseur": ["Luuk Smeekens"],
+      Fysiotherapeuten: ["Anouk Peters", "Auke Huinink", "Beate Schellekens"],
+      "Front/backoffice": ["Sandra Janssen"],
+      "Interne opleider": ["Marion Brouwer"],
+    };
+    const entries = buildRebalancedFutureMonthlyPlan().flatMap((month) =>
+      month.suggestions.flatMap((suggestion) => buildForecastEntrySuggestions(suggestion, catalog)),
+    );
+
+    expect(entries.length).toBeGreaterThan(4);
+    expect(entries.every((entry) => !/Fy-fit|projectleiding|team$/i.test(entry.executorName))).toBe(true);
+    expect(entries.every((entry) => [1, 3, 4].includes(new Date(`${entry.plannedDate}T00:00:00.000Z`).getUTCDay()))).toBe(true);
+    expect(entries.some((entry) => new Date(`${entry.plannedDate}T00:00:00.000Z`).getUTCDay() === 3)).toBe(true);
+    expect(entries.every((entry) => entry.note.length >= 20)).toBe(true);
+  });
+
+  it("blokkeert forecastdetails wanneer geen echte uitvoerder beschikbaar is", () => {
+    const suggestion = buildRebalancedFutureMonthlyPlan()
+      .flatMap((month) => month.suggestions)
+      .find((row) => row.roleCategory === "Front/backoffice")!;
+
+    expect(() => buildForecastEntrySuggestions(suggestion, {})).toThrow(/echte uitvoerder/i);
+    expect(() => buildForecastEntrySuggestions(suggestion, {
+      "Front/backoffice": ["Front/backoffice – nog toe te wijzen"],
+    })).toThrow(/echte uitvoerder/i);
+  });
+
+  it("bouwt de uitvoerdercatalogus uitsluitend uit actieve databaseactoren", () => {
+    const catalog = buildForecastExecutorCatalog(
+      [
+        { category: "Praktijkmanager", user: { id: "heidi", name: "Heidi Staring", active: true } },
+        { category: "Extern adviseur", user: { id: "luuk", name: "Luuk Smeekens", active: true } },
+        { category: "Front/backoffice", user: { id: "marion", name: "Marion Brouwer", active: true } },
+        { category: "Front/backoffice", user: { id: "inactive", name: "Inactieve Actor", active: false } },
+      ],
+      [
+        { userId: "heidi", user: { name: "Heidi Staring" }, therapist: null, workPackage: { code: "WP3" } },
+        { userId: "team", user: { name: "Fysiotherapeuten Fy-fit" }, therapist: { name: "Anouk Peters", active: true } },
+        { userId: "team", user: { name: "Fysiotherapeuten Fy-fit" }, therapist: { name: "Inactieve Therapeut", active: false } },
+      ],
+    );
+
+    expect(catalog).toEqual({
+      Praktijkmanagement: ["Heidi Staring"],
+      "Extern adviseur": ["Luuk Smeekens"],
+      Fysiotherapeuten: ["Anouk Peters"],
+      "Front/backoffice": ["Marion Brouwer"],
+      "Interne opleider": ["Heidi Staring"],
+    });
+    expect(Object.values(catalog).flat()).not.toContain("Inactieve Actor");
+    expect(Object.values(catalog).flat()).not.toContain("Inactieve Therapeut");
   });
 });

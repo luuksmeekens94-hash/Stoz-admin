@@ -170,6 +170,27 @@ describe("forecast planning route", () => {
     expect(mocks.createAudit).not.toHaveBeenCalled();
   });
 
+  it("blokkeert uren toevoegen aan een forecastregel die al als urenconcept is gebruikt", async () => {
+    mocks.findForecast.mockResolvedValue({
+      id: "forecast-1",
+      allocationId: "allocation-1",
+      plannedDate: new Date("2026-09-10T00:00:00.000Z"),
+      executorName: "Testuitvoerder",
+      plannedHours: 1,
+      note: null,
+      materializedHourEntry: { id: "hour-1" },
+    });
+
+    const response = await POST(post(JSON.stringify(validBody)));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "Deze forecastregel is al als urenconcept geregistreerd en kan niet meer worden gewijzigd.",
+    });
+    expect(mocks.updateForecast).not.toHaveBeenCalled();
+    expect(mocks.updateAllocation).not.toHaveBeenCalled();
+  });
+
   it("blokkeert toevoegen nadat de planmaand is goedgekeurd of de versie is gearchiveerd", async () => {
     mocks.findAllocation.mockResolvedValue({
       id: "allocation-1",
@@ -222,12 +243,12 @@ describe("forecast planning route", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Per uitvoerder kan maximaal 24 uur op één datum worden gepland.",
     });
-    expect(mocks.findForecast).toHaveBeenCalledWith({
+    expect(mocks.findForecast).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         allocationId: "allocation-1",
         executorName: { equals: "testuitvoerder", mode: "insensitive" },
       }),
-    });
+    }));
     expect(mocks.createForecast).not.toHaveBeenCalled();
     expect(mocks.updateAllocation).not.toHaveBeenCalled();
     expect(mocks.createAudit).not.toHaveBeenCalled();

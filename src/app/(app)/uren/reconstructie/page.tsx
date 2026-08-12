@@ -16,6 +16,7 @@ import HistoricalReconstructionPlanner, {
   ReconstructionActorOption,
   ReconstructionRegisteredGroup,
 } from "@/components/HistoricalReconstructionPlanner";
+import { buildInterimMaterializationSuggestions } from "@/lib/interim-materialization-suggestions";
 
 export const dynamic = "force-dynamic";
 
@@ -152,6 +153,8 @@ export default async function UrenReconstructiePage() {
 
   const groupMap = new Map<string, ReconstructionRegisteredGroup>();
   const registeredByCategoryAndWorkPackage = new Map<string, number>();
+  const contributorsByCategoryAndWorkPackage = new Map<string, Set<string>>();
+  const contributorsByCategory = new Map<string, Set<string>>();
   for (const entry of entries) {
     const actorKey = entry.therapistId
       ? `therapist:${entry.userId}:${entry.therapistId}`
@@ -179,6 +182,12 @@ export default async function UrenReconstructiePage() {
         scopeKey,
         (registeredByCategoryAndWorkPackage.get(scopeKey) || 0) + entry.hours,
       );
+      const scopedContributors = contributorsByCategoryAndWorkPackage.get(scopeKey) || new Set<string>();
+      scopedContributors.add(actorKey);
+      contributorsByCategoryAndWorkPackage.set(scopeKey, scopedContributors);
+      const categoryContributors = contributorsByCategory.get(category) || new Set<string>();
+      categoryContributors.add(actorKey);
+      contributorsByCategory.set(category, categoryContributors);
     }
   }
 
@@ -208,6 +217,13 @@ export default async function UrenReconstructiePage() {
     ) || 0;
     const remainingHours = Math.round(Math.max(0, targetHours - currentHours) * 100) / 100;
     if (remainingHours === 0) return [];
+    const scopedContributors = Array.from(
+      contributorsByCategoryAndWorkPackage.get(`${category}|${proposal.workPackage.code}`) || [],
+    );
+    const priorContributors = scopedContributors.length > 0
+      ? scopedContributors
+      : Array.from(contributorsByCategory.get(category) || []);
+    const eligibleActors = actors.filter((actor) => categoryByActorKey.get(actor.key) === category);
     return [{
       id: proposal.id,
       title: proposal.title,
@@ -217,7 +233,17 @@ export default async function UrenReconstructiePage() {
       targetHours,
       currentHours,
       remainingHours,
-      actors: actors.filter((actor) => categoryByActorKey.get(actor.key) === category),
+      actors: eligibleActors,
+      suggestions: buildInterimMaterializationSuggestions({
+        proposalId: proposal.id,
+        workPackageCode: proposal.workPackage.code,
+        activityCode: proposal.activity.code,
+        activityName: proposal.activity.name,
+        remainingHours,
+        asOf,
+        actors: eligibleActors,
+        priorContributors,
+      }),
     }];
   });
 

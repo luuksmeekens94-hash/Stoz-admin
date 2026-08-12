@@ -25,6 +25,16 @@ const proposal = {
       roleLabel: "Praktijkmanager",
     },
   ],
+  suggestions: [
+    {
+      key: "proposal-1-1",
+      actorKey: "user:manager",
+      actorName: "Praktijkmanager",
+      date: "2026-07-09",
+      hours: 4,
+      description: "Communicatietraining voorbereid en afgestemd met het behandelteam.",
+    },
+  ],
 };
 
 describe("InterimProposalMaterializer", () => {
@@ -34,14 +44,18 @@ describe("InterimProposalMaterializer", () => {
     vi.stubGlobal("crypto", { randomUUID: () => "123e4567-e89b-42d3-a456-426614174000" });
   });
 
-  it("laat datum, uitvoerder en uitvoeringsbevestiging expliciet open", () => {
+  it("vult de gekozen persoons-, datum- en werksuggestie in maar laat bewijs en bevestiging expliciet open", () => {
     render(<InterimProposalMaterializer asOf="2026-08-12" proposals={[proposal]} />);
 
     fireEvent.click(screen.getByRole("button", { name: /interne opleider invullen/i }));
 
-    expect(screen.getByLabelText(/uitvoerder/i)).toHaveValue("");
-    expect(screen.getByLabelText(/werkelijke uitvoeringsdatum/i)).toHaveValue("");
-    expect(screen.getByLabelText(/uren in deze conceptregel/i)).toHaveValue(18);
+    fireEvent.click(screen.getByRole("button", { name: /suggestie voor praktijkmanager op 9 juli/i }));
+
+    expect(screen.getByLabelText(/uitvoerder/i)).toHaveValue("user:manager");
+    expect(screen.getByLabelText(/werkelijke uitvoeringsdatum/i)).toHaveValue("2026-07-09");
+    expect(screen.getByLabelText(/uren in deze conceptregel/i)).toHaveValue(4);
+    expect(screen.getByRole("textbox", { name: /^werkzaamheden$/i })).toHaveValue(proposal.suggestions[0].description);
+    expect(screen.getByRole("textbox", { name: /bron of onderbouwing/i })).toHaveValue("");
     expect(screen.getByRole("checkbox", { name: /daadwerkelijk/i })).not.toBeChecked();
     expect(screen.getByRole("button", { name: /conceptregistratie aanmaken/i })).toBeDisabled();
   });

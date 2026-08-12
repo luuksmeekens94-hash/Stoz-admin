@@ -11,7 +11,10 @@ export async function DELETE(
     const session = await requireAdmin();
     const { id } = await params;
     const deleted = await prisma.$transaction(async (tx) => {
-      const entry = await tx.forecastEntry.findUnique({ where: { id } });
+      const entry = await tx.forecastEntry.findUnique({
+        where: { id },
+        include: { materializedHourEntry: { select: { id: true } } },
+      });
       if (!entry) throw new Error("FORECAST_ENTRY_NOT_FOUND");
       const allocation = await tx.monthlyPlanAllocation.findUnique({
         where: { id: entry.allocationId },
@@ -23,6 +26,9 @@ export async function DELETE(
       }
       if (allocation.reviewState === "REVIEWED") {
         throw new Error("FORECAST_MONTH_REVIEWED");
+      }
+      if (entry.materializedHourEntry) {
+        throw new Error("FORECAST_ENTRY_MATERIALIZED");
       }
       const detailAggregate = await tx.forecastEntry.aggregate({
         where: { allocationId: entry.allocationId },
@@ -59,7 +65,7 @@ export async function DELETE(
       message === "UNAUTHORIZED" ? 401
         : message === "FORBIDDEN" ? 403
           : message === "FORECAST_ENTRY_NOT_FOUND" || message === "FORECAST_ALLOCATION_NOT_FOUND" ? 404
-            : message === "FORECAST_VERSION_LOCKED" || message === "FORECAST_MONTH_REVIEWED" ? 409
+            : message === "FORECAST_VERSION_LOCKED" || message === "FORECAST_MONTH_REVIEWED" || message === "FORECAST_ENTRY_MATERIALIZED" ? 409
             : message === "FORECAST_TOTAL_INTEGRITY_ERROR" ? 409
               : error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" ? 409
                 : 500;
@@ -67,6 +73,7 @@ export async function DELETE(
       message === "FORECAST_ENTRY_NOT_FOUND" ? "Forecastregel niet gevonden."
         : message === "FORECAST_VERSION_LOCKED" ? "Deze planningversie is niet meer wijzigbaar."
           : message === "FORECAST_MONTH_REVIEWED" ? "Deze planmaand is goedgekeurd en kan niet meer worden gewijzigd."
+            : message === "FORECAST_ENTRY_MATERIALIZED" ? "Deze forecastregel is al als urenconcept geregistreerd en kan niet meer worden verwijderd."
         : message === "FORECAST_TOTAL_INTEGRITY_ERROR" ? "Forecasttotaal is inconsistent; verwijderen is geblokkeerd."
           : status === 409 ? "De forecast is gelijktijdig gewijzigd; vernieuw de pagina en probeer opnieuw."
             : "Forecast verwijderen mislukt.";

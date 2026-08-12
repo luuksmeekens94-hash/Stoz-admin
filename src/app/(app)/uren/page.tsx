@@ -3,8 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import HoursList from "@/components/HoursList";
+import ReviewedPlanningHours from "@/components/ReviewedPlanningHours";
+import { loadReviewedPlanningHours } from "@/lib/reviewed-planning-hours";
 import { HISTORICAL_RECONSTRUCTION_CREATE_ACTION } from "@/lib/historical-reconstruction-db";
 import { parseHistoricalReconstructionProvenance } from "@/lib/historical-reconstruction-integrity";
+import { buildReviewedForecastHourReview } from "@/lib/planned-hour-integrity";
 
 export default async function UrenPage({
   searchParams,
@@ -27,16 +30,22 @@ export default async function UrenPage({
     where.status = params.status;
   }
 
-  const entries = await prisma.hourEntry.findMany({
-    where,
-    orderBy: { date: "desc" },
-    include: {
-      user: { select: { id: true, name: true } },
-      workPackage: true,
-      activity: true,
-      therapist: true,
-    },
-  });
+  const [entries, reviewedPlanningHours] = await Promise.all([
+    prisma.hourEntry.findMany({
+      where,
+      orderBy: { date: "desc" },
+      include: {
+        user: { select: { id: true, name: true } },
+        workPackage: true,
+        activity: true,
+        therapist: true,
+        sourceForecastEntry: {
+          select: { id: true, plannedDate: true, executorName: true, plannedHours: true },
+        },
+      },
+    }),
+    isAdmin ? loadReviewedPlanningHours() : Promise.resolve([]),
+  ]);
   const reconstructionAudits = entries.length
     ? await prisma.auditEvent.findMany({
         where: {
@@ -76,8 +85,31 @@ export default async function UrenPage({
           },
         })
       : [];
+  const planningEntryIds = entries
+    .filter((entry) => Boolean(entry.sourceForecastEntryId))
+    .map((entry) => entry.id);
+  const allPlanningAudits =
+    isAdmin && planningEntryIds.length
+      ? await prisma.auditEvent.findMany({
+          where: { entityType: "HourEntry", entityId: { in: planningEntryIds } },
+          orderBy: { createdAt: "asc" },
+          select: {
+            entityId: true,
+            action: true,
+            reason: true,
+            beforeData: true,
+            afterData: true,
+            actorUserId: true,
+            createdAt: true,
+          },
+        })
+      : [];
   const actorIds = Array.from(
-    new Set(allReconstructionAudits.flatMap((audit) => audit.actorUserId || [])),
+    new Set(
+      [...allReconstructionAudits, ...allPlanningAudits].flatMap(
+        (audit) => audit.actorUserId || [],
+      ),
+    ),
   );
   const auditActors = actorIds.length
     ? await prisma.user.findMany({
@@ -88,6 +120,19 @@ export default async function UrenPage({
   const actorNameById = new Map(auditActors.map((actor) => [actor.id, actor.name]));
   const createAuditByEntryId = new Map(
     reconstructionAudits.map((audit) => [audit.entityId, audit]),
+  );
+  const planningReviewByEntryId = new Map(
+    entries
+      .filter((entry) => Boolean(entry.sourceForecastEntryId))
+      .map((entry) => [
+        entry.id,
+        buildReviewedForecastHourReview({
+          sourceForecastEntryId: entry.sourceForecastEntryId!,
+          sourceForecast: entry.sourceForecastEntry,
+          audits: allPlanningAudits.filter((audit) => audit.entityId === entry.id),
+          actorNameById,
+        }),
+      ]),
   );
   const serializedEntries = JSON.parse(JSON.stringify(entries)).map(
     (entry: { id: string }) => {
@@ -141,6 +186,7 @@ export default async function UrenPage({
         ...entry,
         isHistoricalReconstruction,
         reconstructionReview,
+        planningReview: isAdmin ? planningReviewByEntryId.get(entry.id) || null : null,
       };
     },
   );
@@ -236,6 +282,8 @@ export default async function UrenPage({
           </div>
         </div>
       )}
+
+      {isAdmin && !params.status && <ReviewedPlanningHours rows={reviewedPlanningHours} />}
 
       <HoursList
         entries={serializedEntries}

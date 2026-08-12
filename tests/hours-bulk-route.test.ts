@@ -63,6 +63,25 @@ describe("bulk hour route", () => {
     },
   );
 
+  it.each(["submit", "approve"])(
+    "blokkeert uren uit goedgekeurde planning in de generieke bulkactie %s",
+    async (action) => {
+      mocks.findEntries.mockResolvedValue([{ id: "planned-hour-1", sourceForecastEntryId: "forecast-1" }]);
+      mocks.findAudits.mockResolvedValue([]);
+
+      const response = await PATCH(
+        bulkRequest(JSON.stringify({ action, ids: ["planned-hour-1"] })),
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: expect.stringMatching(/afzonderlijk|goedgekeurde planning/i),
+      });
+      expect(mocks.updateEntries).not.toHaveBeenCalled();
+      expect(mocks.createAudit).not.toHaveBeenCalled();
+    },
+  );
+
   it("blokkeert een legacy TEAM-concept zonder actieve therapeut bij bulkindienen", async () => {
     mocks.findEntries.mockResolvedValue([
       {

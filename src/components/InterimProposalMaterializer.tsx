@@ -21,6 +21,14 @@ export interface InterimMaterializationProposal {
   currentHours: number;
   remainingHours: number;
   actors: InterimMaterializationActor[];
+  suggestions: Array<{
+    key: string;
+    actorKey: string;
+    actorName: string;
+    date: string;
+    hours: number;
+    description: string;
+  }>;
 }
 
 function formatHours(value: number) {
@@ -62,6 +70,18 @@ export default function InterimProposalMaterializer({
     setDate("");
     setHours(String(Math.min(24, proposal.remainingHours)));
     setDescription("");
+    setSourceReference("");
+    setConfirmed(false);
+    setRequestId(globalThis.crypto.randomUUID());
+    setError("");
+    setSuccess("");
+  }
+
+  function selectSuggestion(suggestion: InterimMaterializationProposal["suggestions"][number]) {
+    setActorKey(suggestion.actorKey);
+    setDate(suggestion.date);
+    setHours(String(suggestion.hours));
+    setDescription(suggestion.description);
     setSourceReference("");
     setConfirmed(false);
     setRequestId(globalThis.crypto.randomUUID());
@@ -147,6 +167,27 @@ export default function InterimProposalMaterializer({
       {selected && (
         <section className="card">
           <h2 className="text-lg font-semibold">Conceptregel voor {selected.title}</h2>
+          {selected.suggestions.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold">Voorgestelde verdeling</h3>
+              <p className="mt-1 text-xs text-gray-600">Kies een regel om persoon, datum, uren en werkzaamheden vooraf in te vullen. Controleer alles aan de hand van de werkelijke uitvoering.</p>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {selected.suggestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion.key}
+                    className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-left text-sm hover:border-blue-400"
+                    onClick={() => selectSuggestion(suggestion)}
+                    aria-label={`Suggestie voor ${suggestion.actorName} op ${new Date(`${suggestion.date}T00:00:00.000Z`).toLocaleDateString("nl-NL", { day: "numeric", month: "long", timeZone: "UTC" })}`}
+                  >
+                    <span className="block font-semibold">{suggestion.actorName} · {formatHours(suggestion.hours)} uur</span>
+                    <span className="block text-gray-600">{new Date(`${suggestion.date}T00:00:00.000Z`).toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</span>
+                    <span className="mt-1 block text-xs text-gray-600">{suggestion.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <form className="mt-4 space-y-4" onSubmit={submit}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>

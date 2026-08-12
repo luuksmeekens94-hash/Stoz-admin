@@ -91,8 +91,7 @@ describe("interim proposal-set route", () => {
     mocks.findActivities.mockResolvedValue([
       { id: "a22", code: "A2.2", workPackage: { id: "wp2", code: "WP2" } },
       { id: "a31", code: "A3.1", workPackage: { id: "wp3", code: "WP3" } },
-      { id: "a51", code: "A5.1", workPackage: { id: "wp5", code: "WP5" } },
-      { id: "a61", code: "A6.1", workPackage: { id: "wp6", code: "WP6" } },
+      { id: "a41", code: "A4.1", workPackage: { id: "wp4", code: "WP4" } },
     ]);
     mocks.createSet.mockResolvedValue({ id: "set-1" });
     mocks.createAudit.mockResolvedValue({ id: "audit-1" });
@@ -102,7 +101,7 @@ describe("interim proposal-set route", () => {
     const response = await POST(request() as never);
 
     expect(response.status).toBe(201);
-    await expect(response.json()).resolves.toMatchObject({ proposalCount: 4, proposalHours: 45 });
+    await expect(response.json()).resolves.toMatchObject({ proposalCount: 3, proposalHours: 45 });
     expect(mocks.createSet).toHaveBeenCalledWith({
       data: expect.objectContaining({
         requestKey: "123e4567-e89b-42d3-a456-426614174000",

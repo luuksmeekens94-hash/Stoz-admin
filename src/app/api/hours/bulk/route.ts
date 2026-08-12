@@ -75,6 +75,11 @@ export async function PATCH(request: NextRequest) {
           if (entries.length !== ids.length) {
             throw new Error("Niet alle geselecteerde concepten zijn indienbaar.");
           }
+          if (entries.some((entry) => entry.sourceForecastEntryId)) {
+            throw new HourInputError(
+              "Uren uit goedgekeurde planning moeten afzonderlijk worden beoordeeld en ingediend.",
+            );
+          }
           const reconstructionAudits = await tx.auditEvent.findMany({
             where: {
               entityType: "HourEntry",
@@ -134,6 +139,11 @@ export async function PATCH(request: NextRequest) {
           });
           if (entries.length !== ids.length) {
             throw new Error("Niet alle geselecteerde regels zijn goed te keuren.");
+          }
+          if (entries.some((entry) => entry.sourceForecastEntryId)) {
+            throw new HourInputError(
+              "Uren uit goedgekeurde planning moeten afzonderlijk worden beoordeeld en goedgekeurd.",
+            );
           }
           const reconstructionAudits = await tx.auditEvent.findMany({
             where: {

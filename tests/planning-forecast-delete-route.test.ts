@@ -47,6 +47,7 @@ describe("forecast delete route", () => {
       executorName: "Testuitvoerder",
       plannedHours: 2,
       note: null,
+      materializedHourEntry: null,
     });
     mocks.findAllocation.mockResolvedValue({
       id: "allocation-1",
@@ -118,6 +119,27 @@ describe("forecast delete route", () => {
       error: "Deze planningversie is niet meer wijzigbaar.",
     });
     expect(mocks.deleteForecast).not.toHaveBeenCalled();
+  });
+
+  it("blokkeert verwijderen van een forecastregel die al als urenconcept is gebruikt", async () => {
+    mocks.findForecast.mockResolvedValue({
+      id: "forecast-1",
+      allocationId: "allocation-1",
+      plannedDate: new Date("2026-09-10T00:00:00.000Z"),
+      executorName: "Testuitvoerder",
+      plannedHours: 2,
+      note: null,
+      materializedHourEntry: { id: "hour-1" },
+    });
+
+    const response = await remove();
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "Deze forecastregel is al als urenconcept geregistreerd en kan niet meer worden verwijderd.",
+    });
+    expect(mocks.deleteForecast).not.toHaveBeenCalled();
+    expect(mocks.updateAllocation).not.toHaveBeenCalled();
   });
 
   it("vereist adminrechten voordat forecastgegevens worden geladen", async () => {

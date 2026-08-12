@@ -129,27 +129,29 @@ model Activity {
 }
 
 model HourEntry {
-  id                   String     @id @default(cuid())
-  date                 DateTime
-  hours                Float
-  description          String
-  status               HourStatus @default(DRAFT)
-  userId               String
-  workPackageId        String
-  activityId           String
-  therapistId          String?
-  historicalProposalId String?
-  approvedAt           DateTime?
-  approvedBy           String?
+  id                    String     @id @default(cuid())
+  date                  DateTime
+  hours                 Float
+  description           String
+  status                HourStatus @default(DRAFT)
+  userId                String
+  workPackageId         String
+  activityId            String
+  therapistId           String?
+  historicalProposalId  String?
+  sourceForecastEntryId String?    @unique
+  approvedAt            DateTime?
+  approvedBy            String?
   // IMMUTABLE - critical for RVO audit
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
 
-  user               User                 @relation(fields: [userId], references: [id])
-  workPackage        WorkPackage          @relation(fields: [workPackageId], references: [id])
-  activity           Activity             @relation(fields: [activityId], references: [id])
-  therapist          Therapist?           @relation(fields: [therapistId], references: [id])
-  historicalProposal InterimHourProposal? @relation(fields: [historicalProposalId], references: [id], onDelete: Restrict)
+  user                User                 @relation(fields: [userId], references: [id])
+  workPackage         WorkPackage          @relation(fields: [workPackageId], references: [id])
+  activity            Activity             @relation(fields: [activityId], references: [id])
+  therapist           Therapist?           @relation(fields: [therapistId], references: [id])
+  historicalProposal  InterimHourProposal? @relation(fields: [historicalProposalId], references: [id], onDelete: Restrict)
+  sourceForecastEntry ForecastEntry?       @relation(fields: [sourceForecastEntryId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   @@index([therapistId])
@@ -375,7 +377,8 @@ model ForecastEntry {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  allocation MonthlyPlanAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  allocation            MonthlyPlanAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  materializedHourEntry HourEntry?
 
   @@unique([allocationId, plannedDate, executorName])
   @@index([plannedDate])
