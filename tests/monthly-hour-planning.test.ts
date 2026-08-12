@@ -296,7 +296,7 @@ describe("buildCorrectiveMonthlyPlan", () => {
       [
         { category: "Praktijkmanager", user: { id: "heidi", name: "Heidi Staring", active: true } },
         { category: "Extern adviseur", user: { id: "luuk", name: "Luuk Smeekens", active: true } },
-        { category: "Front/backoffice", user: { id: "marion", name: "Marion Brouwer", active: true } },
+        { category: "Front/backoffice", user: null },
         { category: "Front/backoffice", user: { id: "inactive", name: "Inactieve Actor", active: false } },
       ],
       [
@@ -304,16 +304,29 @@ describe("buildCorrectiveMonthlyPlan", () => {
         { userId: "team", user: { name: "Fysiotherapeuten Fy-fit" }, therapist: { name: "Anouk Peters", active: true } },
         { userId: "team", user: { name: "Fysiotherapeuten Fy-fit" }, therapist: { name: "Inactieve Therapeut", active: false } },
       ],
+      [
+        { name: "Marion Brouwer", active: true },
+        { name: "Sjoerd Hendriks", active: true },
+      ],
     );
 
     expect(catalog).toEqual({
       Praktijkmanagement: ["Heidi Staring"],
       "Extern adviseur": ["Luuk Smeekens"],
       Fysiotherapeuten: ["Anouk Peters"],
-      "Front/backoffice": ["Marion Brouwer"],
+      "Front/backoffice": ["Marion Brouwer", "Sjoerd Hendriks"],
       "Interne opleider": ["Heidi Staring"],
     });
     expect(Object.values(catalog).flat()).not.toContain("Inactieve Actor");
     expect(Object.values(catalog).flat()).not.toContain("Inactieve Therapeut");
+  });
+
+  it("blokkeert de operationele frontofficecombinatie wanneer één gekozen uitvoerder niet actief is", () => {
+    const catalog = buildForecastExecutorCatalog([], [], [
+      { name: "Marion Brouwer", active: true },
+      { name: "Sjoerd Hendriks", active: false },
+    ]);
+
+    expect(catalog["Front/backoffice"]).toEqual([]);
   });
 });

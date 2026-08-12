@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   findActivities: vi.fn(),
   findBudgetAllocations: vi.fn(),
   findContributors: vi.fn(),
+  findOperationalExecutors: vi.fn(),
   deleteMany: vi.fn(),
   createAllocation: vi.fn(),
   createAudit: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("@/lib/prisma", () => ({
     hourEntry: { findMany: mocks.findContributors },
     workPackage: { findMany: mocks.findWorkPackages },
     activity: { findMany: mocks.findActivities },
+    user: { findMany: mocks.findOperationalExecutors },
     $transaction: mocks.transaction,
   },
 }));
@@ -100,6 +102,10 @@ describe("future planning rebalance route", () => {
       { userId: "luuk", user: { name: "Luuk Smeekens" }, therapist: null },
       { userId: "team", user: { name: "Fysiotherapeuten Fy-fit" }, therapist: { name: "Anouk Peters" } },
     ]);
+    mocks.findOperationalExecutors.mockResolvedValue([
+      { name: "Marion Brouwer", active: true },
+      { name: "Sjoerd Hendriks", active: true },
+    ]);
     mocks.deleteMany.mockResolvedValue({ count: 1 });
     mocks.createAllocation.mockResolvedValue({ id: "new-allocation" });
     mocks.createAudit.mockResolvedValue({ id: "audit-1" });
@@ -121,6 +127,10 @@ describe("future planning rebalance route", () => {
     expect(mocks.createAllocation).toHaveBeenCalled();
     expect(mocks.createAllocation.mock.calls.every(([input]) => input.data.reviewState === "DRAFT")).toBe(true);
     expect(mocks.createAllocation.mock.calls.every(([input]) => input.data.monthStart >= new Date("2026-09-01T00:00:00.000Z"))).toBe(true);
+    const frontofficeExecutors = mocks.createAllocation.mock.calls
+      .filter(([input]) => input.data.roleCategory === "Front/backoffice")
+      .flatMap(([input]) => input.data.forecastEntries.create.map((entry: { executorName: string }) => entry.executorName));
+    expect(new Set(frontofficeExecutors)).toEqual(new Set(["Marion Brouwer", "Sjoerd Hendriks"]));
     expect(mocks.createAudit).toHaveBeenCalledWith({
       data: expect.objectContaining({
         entityType: "PlanningVersion",
@@ -228,6 +238,7 @@ describe("future planning rebalance route", () => {
       { category: "Praktijkmanager", user: { id: "heidi", name: "Heidi Staring", active: true } },
       { category: "Extern adviseur", user: { id: "luuk", name: "Luuk Smeekens", active: true } },
     ]);
+    mocks.findOperationalExecutors.mockResolvedValue([]);
 
     const response = await request();
 

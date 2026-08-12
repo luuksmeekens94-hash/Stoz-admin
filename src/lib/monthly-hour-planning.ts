@@ -450,6 +450,11 @@ export function spreadPlannedHoursAcrossDates(
 
 export type ForecastExecutorCatalog = Partial<Record<string, string[]>>;
 
+export const FRONT_BACKOFFICE_OPERATIONAL_EXECUTORS = [
+  "Marion Brouwer",
+  "Sjoerd Hendriks",
+] as const;
+
 export type ForecastExecutorBudgetRow = {
   category: string;
   user: { id: string; name: string | null; active: boolean } | null;
@@ -462,6 +467,11 @@ export type ForecastExecutorContributionRow = {
   workPackage?: { code: string };
 };
 
+export type ForecastOperationalExecutorRow = {
+  name: string;
+  active: boolean;
+};
+
 function uniqueExecutorNames(values: Array<string | null | undefined>) {
   return Array.from(new Set(values
     .map((value) => value?.trim())
@@ -472,6 +482,7 @@ function uniqueExecutorNames(values: Array<string | null | undefined>) {
 export function buildForecastExecutorCatalog(
   budgetRows: ForecastExecutorBudgetRow[],
   contributionRows: ForecastExecutorContributionRow[],
+  operationalExecutorRows?: ForecastOperationalExecutorRow[],
 ): ForecastExecutorCatalog {
   const categoryByUserId = new Map(
     budgetRows.flatMap((row) => row.user?.active ? [[row.user.id, row.category] as const] : []),
@@ -496,12 +507,22 @@ export function buildForecastExecutorCatalog(
       .filter((row) => row.therapist && row.therapist.active !== false)
       .map((row) => row.therapist?.name),
   );
+  const activeOperationalExecutors = uniqueExecutorNames(
+    (operationalExecutorRows || [])
+      .filter((row) => row.active)
+      .map((row) => row.name),
+  );
+  const frontBackofficeExecutors = operationalExecutorRows === undefined
+    ? fallbackByCategory("Front/backoffice")
+    : FRONT_BACKOFFICE_OPERATIONAL_EXECUTORS.every((name) => activeOperationalExecutors.includes(name))
+      ? [...FRONT_BACKOFFICE_OPERATIONAL_EXECUTORS]
+      : [];
 
   return {
     Praktijkmanagement: practiceContributors.length > 0 ? practiceContributors : fallbackByCategory("Praktijkmanager"),
     "Extern adviseur": externalContributors.length > 0 ? externalContributors : fallbackByCategory("Extern adviseur"),
     Fysiotherapeuten: therapists,
-    "Front/backoffice": fallbackByCategory("Front/backoffice"),
+    "Front/backoffice": frontBackofficeExecutors,
     "Interne opleider": trainerContributors.length > 0
       ? trainerContributors
       : practiceContributors.length > 0
@@ -522,6 +543,7 @@ export function forecastExecutorsFor(
 
 function preferredPlanningDates(
   suggestion: Pick<MonthlyPlanSuggestion, "monthKey" | "plannedHours" | "workPackageCode">,
+  minimumRowCount = 1,
 ) {
   const [year, month] = suggestion.monthKey.split("-").map(Number);
   const dates: string[] = [];
@@ -536,7 +558,10 @@ function preferredPlanningDates(
   }
 
   const totalQuarters = Math.round(suggestion.plannedHours * 4);
-  const rowCount = Math.ceil(totalQuarters / 16);
+  const rowCount = Math.max(
+    Math.ceil(totalQuarters / 16),
+    Math.min(minimumRowCount, totalQuarters),
+  );
   const baseQuarters = Math.floor(totalQuarters / rowCount);
   const wednesdays = dates.filter((date) => new Date(`${date}T00:00:00.000Z`).getUTCDay() === 3);
   let remainder = totalQuarters - baseQuarters * rowCount;
@@ -580,7 +605,7 @@ export function buildForecastEntrySuggestions(
   if (executors.length === 0) {
     throw new Error(`Geen echte uitvoerder beschikbaar voor ${suggestion.roleCategory}.`);
   }
-  return preferredPlanningDates(suggestion).map((date, index) => ({
+  return preferredPlanningDates(suggestion, executors.length).map((date, index) => ({
     plannedDate: date.date,
     executorName: executors[index % executors.length],
     plannedHours: date.hours,

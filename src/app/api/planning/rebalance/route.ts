@@ -6,6 +6,7 @@ import {
   buildForecastEntrySuggestions,
   buildForecastExecutorCatalog,
   buildRebalancedFutureMonthlyPlan,
+  FRONT_BACKOFFICE_OPERATIONAL_EXECUTORS,
   type ForecastExecutorCatalog,
 } from "@/lib/monthly-hour-planning";
 import { prisma } from "@/lib/prisma";
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
     const suggestions = plan.flatMap((month) => month.suggestions);
     const workPackageCodes = Array.from(new Set(suggestions.map((row) => row.workPackageCode)));
     const activityCodes = Array.from(new Set(suggestions.map((row) => row.activityCode)));
-    const [workPackages, activities, budgetRows, contributionRows] = await Promise.all([
+    const [workPackages, activities, budgetRows, contributionRows, operationalExecutorRows] = await Promise.all([
       prisma.workPackage.findMany({
         where: { code: { in: workPackageCodes } },
         select: { id: true, code: true },
@@ -151,6 +152,13 @@ export async function POST(request: Request) {
           workPackage: { select: { code: true } },
         },
       }),
+      prisma.user.findMany({
+        where: {
+          active: true,
+          name: { in: [...FRONT_BACKOFFICE_OPERATIONAL_EXECUTORS] },
+        },
+        select: { name: true, active: true },
+      }),
     ]);
     const workPackageByCode = new Map(workPackages.map((row) => [row.code, row.id]));
     const activityByCode = new Map(activities.map((row) => [row.code, row]));
@@ -169,7 +177,7 @@ export async function POST(request: Request) {
         );
       }
     }
-    const executorCatalog = buildForecastExecutorCatalog(budgetRows, contributionRows);
+    const executorCatalog = buildForecastExecutorCatalog(budgetRows, contributionRows, operationalExecutorRows);
 
     const result = await prisma.$transaction(async (tx) => {
       const version = await tx.planningVersion.findFirst({
