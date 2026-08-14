@@ -169,6 +169,92 @@ describe("buildFinancialSteeringModel", () => {
     expect(model.blockers).toContain("HOUR_CLASSIFICATION_PENDING");
   });
 
+  it("classificeert fysiotherapeutische scholingsuren tegen het bevestigde interne tarief buiten Model B", () => {
+    const model = buildFinancialSteeringModel({
+      participants,
+      hours: [
+        { id: "training", category: "Fysiotherapeuten", actorName: "Behandelaar", workPackageCode: "WP3", hours: 2 },
+      ],
+      budgetLines: [
+        {
+          id: "physio-implementation",
+          category: "Fysiotherapeuten",
+          label: "Fysiotherapeuten · implementatie",
+          rvoSection: "IMPLEMENTATION",
+          costType: "INTERNAL_LABOUR",
+          eligibleWorkPackageCodes: ["WP4"],
+          budgetHours: 60,
+          hourlyRate: 50,
+          budgetEuros: 3_000,
+        },
+      ],
+      nonSubsidisedHourRules: [
+        {
+          id: "physio-training-operational",
+          category: "Fysiotherapeuten",
+          label: "Scholingsdeelname fysiotherapeuten · operationeel",
+          eligibleWorkPackageCodes: ["WP3"],
+          hourlyRate: 35,
+          decisionReference: "Projectbesluit 14 augustus 2026: intern tarief, buiten Model B.",
+        },
+      ],
+      invoices: [],
+      overheadRate: 0.15,
+      approvedBudgetSourceStatus: "OFFICIAL_FILE",
+    });
+
+    expect(model.unallocatedHours).toEqual([]);
+    expect(model.nonSubsidisedHours).toEqual([
+      expect.objectContaining({
+        id: "physio-training-operational",
+        hours: 2,
+        hourlyRate: 35,
+        indicativeEuros: 70,
+      }),
+    ]);
+    expect(model.totals.classificationPendingEuros).toBe(0);
+    expect(model.totals.knownRealizedEuros).toBe(0);
+    expect(model.blockers).not.toContain("HOUR_CLASSIFICATION_PENDING");
+  });
+
+  it("stelt een nog niet gefactureerde externe regel uit zonder deze als actual te claimen of het tussenverslag te blokkeren", () => {
+    const model = buildFinancialSteeringModel({
+      participants: [],
+      hours: [
+        { id: "website-hour", category: "Websitebouwer", actorName: "Leverancier", workPackageCode: "WP2", hours: 56 },
+      ],
+      budgetLines: [
+        {
+          id: "website-builder",
+          category: "Websitebouwer",
+          label: "Websitebouwer",
+          rvoSection: "IMPLEMENTATION",
+          costType: "EXTERNAL_LABOUR",
+          eligibleWorkPackageCodes: ["WP2"],
+          budgetHours: 25,
+          hourlyRate: 100,
+          budgetEuros: 2_500,
+          uninvoicedCostTreatment: "DEFER_TO_LATER_REPORT",
+          reportingNote: "Pas opnemen na ontvangst en koppeling van de factuur.",
+        },
+      ],
+      invoices: [],
+      overheadRate: 0.15,
+      approvedBudgetSourceStatus: "OFFICIAL_FILE",
+    });
+
+    expect(model.totals.knownRealizedEuros).toBe(0);
+    expect(model.deferredExternalCosts).toEqual([
+      expect.objectContaining({
+        id: "website-builder",
+        reportableHours: 56,
+        indicativeHoursValueEuros: 5_600,
+      }),
+    ]);
+    expect(model.blockers).not.toContain("EXTERNAL_COST_EVIDENCE_INCOMPLETE");
+    expect(model.isReportReady).toBe(true);
+  });
+
   it("gebruikt expliciete begrotingsbedragen in plaats van een risicovolle reconstructie", () => {
     const model = buildFinancialSteeringModel({
       participants,

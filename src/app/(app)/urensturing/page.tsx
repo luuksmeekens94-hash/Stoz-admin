@@ -9,6 +9,7 @@ import {
   CATEGORY_USER_EMAILS,
   EXPECTED_WORK_PACKAGES_BY_CATEGORY,
   INVOICE_BUDGET_LINE_SUGGESTIONS,
+  NON_SUBSIDISED_HOUR_RULES,
   PROJECT_STEERING_CONFIG,
   SOURCE_NOTES,
   WORK_PACKAGE_PHASES,
@@ -224,6 +225,7 @@ export default async function UrensturingPage() {
     overheadRate: 0.15,
     approvedBudgetSourceStatus: PROJECT_STEERING_CONFIG.approvedBudgetSourceStatus,
     approvedBudgetTotalEuros: PROJECT_STEERING_CONFIG.approvedEligibleCostBaselineEuros,
+    nonSubsidisedHourRules: NON_SUBSIDISED_HOUR_RULES,
   });
 
   const activityRows = workPackages.flatMap((workPackage) =>
@@ -600,7 +602,7 @@ export default async function UrensturingPage() {
               <tbody className="divide-y divide-gray-100">
                 {financial.rows.map((row) => (
                   <tr key={row.id}>
-                    <td className="px-4 py-3"><p className="font-semibold">{row.label}</p><p className="text-xs text-gray-500">{financial.sections.find((section) => section.id === row.rvoSection)?.label || "Niet uitgesplitst"} · {row.costType === "INTERNAL_LABOUR" ? "Intern personeel" : row.costType === "EXTERNAL_LABOUR" ? "Kosten derden" : row.costType === "OVERHEAD" ? "15% opslag" : "Overige kosten"}</p></td>
+                    <td className="px-4 py-3"><p className="font-semibold">{row.label}</p><p className="text-xs text-gray-500">{financial.sections.find((section) => section.id === row.rvoSection)?.label || "Niet uitgesplitst"} · {row.costType === "INTERNAL_LABOUR" ? "Intern personeel" : row.costType === "EXTERNAL_LABOUR" ? "Kosten derden" : row.costType === "OVERHEAD" ? "15% opslag" : "Overige kosten"}</p>{row.reportingNote && <p className="mt-1 max-w-sm text-xs text-blue-700">{row.reportingNote}</p>}</td>
                     <td className="px-4 py-3 text-right font-medium">{euros(row.budgetEuros)}</td>
                     <td className="px-4 py-3 text-right">{row.budgetHours ? hours(row.reportReadyHours) : "—"}</td>
                     <td className={`px-4 py-3 text-right ${row.classificationPendingHours > 0 ? "font-bold text-amber-700" : ""}`}>{row.budgetHours ? hours(row.classificationPendingHours) : "—"}</td>
@@ -623,6 +625,34 @@ export default async function UrensturingPage() {
                 <li key={row.category} className="flex flex-wrap justify-between gap-2 rounded-lg bg-white/70 px-3 py-2">
                   <span className="font-medium">{row.category}</span>
                   <span>{hours(row.hours)} · indicatief {euros(row.indicativeEuros)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {financial.nonSubsidisedHours.length > 0 && (
+          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-5">
+            <h3 className="font-semibold text-blue-950">Operationele uren buiten Model B</h3>
+            <p className="mt-1 text-sm text-blue-900/80">Deze uren zijn inhoudelijk geclassificeerd en gewaardeerd, maar worden niet als subsidiabele realisatie of overheadbasis opgevoerd.</p>
+            <ul className="mt-3 space-y-2 text-sm text-blue-950">
+              {financial.nonSubsidisedHours.map((row) => (
+                <li key={row.id} className="rounded-lg bg-white/70 px-3 py-2">
+                  <div className="flex flex-wrap justify-between gap-2"><span className="font-medium">{row.label}</span><span>{hours(row.hours)} × {euros(row.hourlyRate)} = {euros(row.indicativeEuros)}</span></div>
+                  <p className="mt-1 text-xs text-blue-800">{row.decisionReference}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {financial.deferredExternalCosts.length > 0 && (
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-5">
+            <h3 className="font-semibold text-violet-950">Externe kosten doorgeschoven naar een latere rapportage</h3>
+            <p className="mt-1 text-sm text-violet-900/80">De uren blijven zichtbaar als operationele hoeveelheid. Zonder gekoppelde factuur is het actual €0; dit blokkeert het huidige voortgangsverslag niet.</p>
+            <ul className="mt-3 space-y-2 text-sm text-violet-950">
+              {financial.deferredExternalCosts.map((row) => (
+                <li key={row.id} className="rounded-lg bg-white/70 px-3 py-2">
+                  <div className="flex flex-wrap justify-between gap-2"><span className="font-medium">{row.label}</span><span>{hours(row.reportableHours)} · indicatieve urenwaarde {euros(row.indicativeHoursValueEuros)} · actual €0</span></div>
+                  <p className="mt-1 text-xs text-violet-800">{row.reportingNote}</p>
                 </li>
               ))}
             </ul>

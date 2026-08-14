@@ -139,6 +139,32 @@ export interface HistoricalReconstructionScopeKey {
   activityId: string;
 }
 
+export function validateHistoricalReconstructionScopeTargets(
+  targets: Array<{ registeredHours: number; confirmedTargetHours: number }>,
+) {
+  if (targets.length === 0) return;
+  if (
+    targets.some(
+      (target) =>
+        !Number.isFinite(target.registeredHours) ||
+        !Number.isFinite(target.confirmedTargetHours),
+    )
+  ) {
+    throw new HistoricalReconstructionIntegrityError(
+      "De actuele scope-uren konden niet betrouwbaar worden vastgesteld.",
+    );
+  }
+  const registeredHours = Math.max(...targets.map((target) => target.registeredHours));
+  const confirmedTargetHours = Math.max(
+    ...targets.map((target) => target.confirmedTargetHours),
+  );
+  if (registeredHours > confirmedTargetHours + 0.0001) {
+    throw new HistoricalReconstructionIntegrityError(
+      "De actuele geregistreerde uren overschrijden de hoogste bevestigde doelstand.",
+    );
+  }
+}
+
 function scopeIdentity(scope: HistoricalReconstructionScopeKey) {
   return [
     scope.userId,
@@ -211,12 +237,46 @@ export async function validateHistoricalReconstructionTargetsForScopes(
   scopes: HistoricalReconstructionScopeKey[],
 ) {
   const reconstructionEntries = await loadHistoricalReconstructionEntriesForScopes(tx, scopes);
+  const targetsByScope = new Map<string, Array<{
+    registeredHours: number;
+    confirmedTargetHours: number;
+  }>>();
   for (const reconstructionEntry of reconstructionEntries) {
-    const reconstruction = await loadAndValidateHistoricalReconstruction(tx, reconstructionEntry);
+    const reconstruction = await loadAndValidateHistoricalReconstruction(tx, reconstructionEntry, {
+      enforceTarget: false,
+    });
     if (!reconstruction) {
       throw new HistoricalReconstructionIntegrityError("De reconstructieprovenance ontbreekt.");
     }
+    const identity = scopeIdentity(reconstructionEntry);
+    const targets = targetsByScope.get(identity) || [];
+    targets.push({
+      registeredHours: reconstruction.registeredHours,
+      confirmedTargetHours: reconstruction.provenance.confirmedTargetHours,
+    });
+    targetsByScope.set(identity, targets);
   }
+  for (const targets of Array.from(targetsByScope.values())) {
+    validateHistoricalReconstructionScopeTargets(targets);
+  }
+}
+
+export async function loadAndValidateHistoricalReconstructionWithHighestScopeTarget(
+  tx: Prisma.TransactionClient,
+  entry: HourEntry,
+) {
+  const reconstruction = await loadAndValidateHistoricalReconstruction(tx, entry, {
+    enforceTarget: false,
+  });
+  if (!reconstruction) return null;
+
+  await validateHistoricalReconstructionTargetsForScopes(tx, [{
+    userId: entry.userId,
+    therapistId: entry.therapistId,
+    workPackageId: entry.workPackageId,
+    activityId: entry.activityId,
+  }]);
+  return reconstruction;
 }
 
 export function historicalReconstructionEntrySnapshot(entry: HourEntry) {

@@ -229,7 +229,7 @@ export function buildReportQuestions(input: BuildReportQuestionsInput): ReportQu
       section: "Datakwaliteit",
       priority: "BLOCKER",
       question:
-        "Reconcilieer de presentielijst op naam met de WP3-urenregels. Voeg alleen uren toe voor personen die aantoonbaar deelnamen en van wie inzet subsidiabel is.",
+        "Reconcilieer de presentielijst op naam met de WP3-urenregels. Voeg alleen uren toe voor personen die aantoonbaar deelnamen; waardeer deze niet-subsidiabele operationele inzet tegen €35 per uur en houd die zichtbaar buiten Model B.",
       knownEvidence: `${input.presentTrainingAttendees} aanwezigen tegenover ${input.trainingHourEntryCount} afzonderlijke WP3-urenregels.`,
       reason:
         "Een verschil is geen bewijs voor ontbrekende uren; personen, rollen, datum en begrotingsgrond moeten eerst overeenkomen.",

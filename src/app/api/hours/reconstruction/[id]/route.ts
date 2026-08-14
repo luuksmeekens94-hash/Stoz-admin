@@ -11,6 +11,7 @@ import {
   historicalReconstructionEntrySnapshot,
   isAllowedHistoricalReconstructionTransition,
   loadAndValidateHistoricalReconstruction,
+  loadAndValidateHistoricalReconstructionWithHighestScopeTarget,
   validateInterimProposalTarget,
 } from "@/lib/historical-reconstruction-db";
 import { HistoricalReconstructionIntegrityError } from "@/lib/historical-reconstruction-integrity";
@@ -100,9 +101,9 @@ export async function PATCH(
         if (!current || current.status !== entry.status) {
           throw new HourEntryConcurrencyError();
         }
-        const reconstruction = await loadAndValidateHistoricalReconstruction(tx, current, {
-          enforceTarget: targetStatus !== "DRAFT",
-        });
+        const reconstruction = targetStatus === "DRAFT"
+          ? await loadAndValidateHistoricalReconstruction(tx, current, { enforceTarget: false })
+          : await loadAndValidateHistoricalReconstructionWithHighestScopeTarget(tx, current);
         if (!reconstruction) {
           throw new HistoricalReconstructionIntegrityError(
             "De registratie is geen geldige historische reconstructie.",

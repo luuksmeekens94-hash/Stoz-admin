@@ -141,5 +141,62 @@ describe("resolveReportQuestions", () => {
         (answer) => answer.question.id === "hours-over-budget-fysiotherapeuten",
       )?.answer,
     ).toMatch(/68 uur.*implementatie.*28 uur.*opleiding/i);
+    expect(
+      result.resolvedAnswers.find(
+        (answer) => answer.question.id === "hours-over-budget-fysiotherapeuten",
+      )?.answer,
+    ).toMatch(/€35.*buiten Model B/i);
+    const websiteAnswer = result.resolvedAnswers.find(
+      (answer) => answer.question.id === "hours-over-budget-websitebouwer",
+    );
+    const physiotherapistAnswer = result.resolvedAnswers.find(
+      (answer) => answer.question.id === "hours-over-budget-fysiotherapeuten",
+    );
+    expect(websiteAnswer?.decidedOn).toBe("2026-08-14");
+    expect(physiotherapistAnswer?.decidedOn).toBe("2026-08-14");
+    expect(physiotherapistAnswer?.answer).toMatch(
+      /60 uur.*verleende.*8 implementatie-uren.*formele herverdeling/i,
+    );
+    expect(physiotherapistAnswer?.answer).not.toMatch(/68 uur onder subsidiabele/i);
+  });
+
+  it("dateert alleen de nieuwe tariefbesluiten op 14 augustus", () => {
+    const questions = buildReportQuestions(input({
+      financial: {
+        blockers: [],
+        totals: {
+          pendingInvoiceMappingEuros: 0,
+          unmappedInvoiceEuros: 0,
+          classificationPendingEuros: 980,
+        },
+      },
+    }));
+    const result = resolveReportQuestions(questions);
+
+    expect(
+      result.resolvedAnswers.find(
+        (answer) => answer.question.id === "financial-hour-classification-pending",
+      )?.decidedOn,
+    ).toBe("2026-08-14");
+    expect(
+      result.resolvedAnswers.find(
+        (answer) => answer.question.id === "model-d-planning",
+      )?.decidedOn,
+    ).toBe("2026-08-10");
+  });
+
+  it("reconcilieert WP3-deelname als niet-subsidiabele operationele inzet", () => {
+    const questions = buildReportQuestions(input({ trainingHourEntryCount: 14 }));
+    const reconciliationQuestion = questions.find(
+      (question) => question.id === "training-attendance-reconciliation",
+    );
+    const answer = resolveReportQuestions(questions).resolvedAnswers.find(
+      (resolved) => resolved.question.id === "training-attendance-reconciliation",
+    );
+
+    expect(reconciliationQuestion?.question).toMatch(/aantoonbaar deelnamen.*niet-subsidiabele.*€35.*buiten Model B/i);
+    expect(answer?.answer).toMatch(/bevestigde training.*maximaal twee.*€35.*buiten Model B/i);
+    expect(answer?.answer).not.toMatch(/Iedere aanwezige deelnemer mag twee/i);
+    expect(answer?.decidedOn).toBe("2026-08-14");
   });
 });

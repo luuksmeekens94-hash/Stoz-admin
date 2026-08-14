@@ -9,16 +9,22 @@ export type ResolvedReportAnswer = {
 
 const DECIDED_ON = "2026-08-10";
 const DECIDED_BY = "Projecteigenaar";
+const DECIDED_ON_BY_ID: Record<string, string> = {
+  "hours-over-budget-websitebouwer": "2026-08-14",
+  "hours-over-budget-fysiotherapeuten": "2026-08-14",
+  "financial-hour-classification-pending": "2026-08-14",
+  "training-attendance-reconciliation": "2026-08-14",
+};
 
 const ANSWERS_BY_ID: Record<string, string> = {
   "hours-over-budget-websitebouwer":
-    "De websiteleverancier heeft 56 uur besteed aan WP2. De extra 31 uur ten opzichte van de oorspronkelijke 25 uur waren nodig voor onderdeel B1, de balans tussen SEO en inhoudelijke optimalisatie en de Arabische en Turkse versie, die meer uitwerking kostten dan vooraf begroot. Alle 56 uur worden als implementatie gerapporteerd; de begrotingsafwijking blijft zichtbaar.",
+    "De websiteleverancier heeft operationeel 56 uur besteed aan WP2. De extra 31 uur ten opzichte van de oorspronkelijke 25 uur waren nodig voor onderdeel B1, de balans tussen SEO en inhoudelijke optimalisatie en de Arabische en Turkse versie. Zonder gekoppelde factuur worden deze uren in het huidige Model B op €0 actual gezet en pas in een latere rapportage als gemaakte kosten opgenomen; dit is daarom geen blocker voor het huidige voortgangsverslag.",
   "hours-over-budget-fysiotherapeuten":
-    "Van de 96 geregistreerde fysiotherapie-uren vallen 68 uur onder implementatie en 28 uur onder opleiding. De implementatie-inzet betreft vakinhoudelijke expertise, bijdragen aan video’s en contentontwikkeling, ondersteuning van project- en innovatiemanagement en de rol van key-user bij de implementatie in de praktijk. Deze feitelijke inzet wordt zo in het verslag opgenomen; de afwijking ten opzichte van de oorspronkelijke urenverdeling blijft zichtbaar.",
+    "Van de 96 geregistreerde fysiotherapie-uren vallen 68 uur onder implementatie en 28 uur onder opleiding. Voor 60 uur bestaat de verleende implementatieregel. De 8 implementatie-uren daarboven blijven zichtbaar als boven begroting en worden niet onvoorwaardelijk subsidiabel geclaimd zolang een formele herverdeling ontbreekt. De 28 opleidingsuren worden tegen het bevestigde interne waarderingstarief van €35 per uur als operationele scholingsdeelname geclassificeerd: €980 zichtbaar buiten Model B, zonder subsidieclaim of overhead.",
   "approved-budget-file-missing":
     "De gedeelde verleningsbeschikking van RVO en de ingediende Model B-begroting worden samen als leidende financiële bron gebruikt. De in de beschikking gewijzigde bedragen en subsidieverlening gaan voor op de oorspronkelijke begroting.",
   "financial-hour-classification-pending":
-    "Registreer en rapporteer de uren in de inhoudelijk meest logische kostencategorie. Inhoudsontwikkeling en vakinhoudelijke fysiotherapie-inzet vallen onder implementatie; opleidingsdeelname valt onder opleiding. Afwijkingen ten opzichte van de verleende begroting blijven zichtbaar als overschrijding en worden niet uit de administratie geweerd.",
+    "Registreer uren in de inhoudelijk passende categorie. De fysiotherapeutische opleidingsdeelname wordt tegen €35 per uur operationeel gewaardeerd en transparant buiten Model B gehouden; alleen de passende implementatie-inzet telt mee als subsidiabele realisatie.",
   "vat-treatment-confirmation":
     "Fy-fit kan de btw voor dit project niet verrekenen. Niet-verrekenbare btw maakt daarom onderdeel uit van de projectkosten. Voor leverancierskosten wordt dit toegepast op basis van de facturen; de financiële onderbouwing toont bedragen inclusief niet-verrekenbare btw.",
   "work-package-classification-WP2":
@@ -30,7 +36,7 @@ const ANSWERS_BY_ID: Record<string, string> = {
   "future-hours":
     "De bevestigde datumcorrectie is via de gespecialiseerde reconstructieroute verwerkt, met behoud van uren, activiteiten en auditspoor. Na de rapportagepeildatum staan daardoor geen gerealiseerde uren meer geregistreerd.",
   "training-attendance-reconciliation":
-    "De presentielijst van de cursus/training is leidend. Iedere aanwezige deelnemer mag twee opleidingsuren geregistreerd krijgen; naamvarianten worden als dezelfde persoon behandeld en ontbrekende deelnameregistraties worden aangevuld.",
+    "De presentielijst van de bevestigde training is leidend. Alleen aantoonbare deelname wordt geregistreerd, tot maximaal twee uur per deelnemer. Deze inzet wordt tegen €35 per uur gewaardeerd en zichtbaar buiten Model B gehouden; naamvarianten worden als dezelfde persoon behandeld.",
   "client-results-missing":
     "Er zijn nog geen volledige cliënttrajecten met een afgeronde voor- en nameting in de administratie. De eerste voortgangsrapportage vermeldt daarom dat cliëntuitkomsten nog niet beschikbaar zijn en dat meting volgt na afronding van de eerste trajecten.",
   "therapist-survey-missing":
@@ -96,7 +102,7 @@ export function resolveReportQuestions(questions: ReportQuestion[]): {
     resolvedAnswers.push({
       question,
       answer,
-      decidedOn: DECIDED_ON,
+      decidedOn: DECIDED_ON_BY_ID[question.id] || DECIDED_ON,
       decidedBy: DECIDED_BY,
     });
   }

@@ -25,10 +25,10 @@ import {
   HistoricalReconstructionIntegrityError,
   parseHistoricalReconstructionPayload,
   parseHistoricalReconstructionProvenance,
-  validateHistoricalReconstructionIntegrity,
 } from "@/lib/historical-reconstruction-integrity";
 import {
   HISTORICAL_RECONSTRUCTION_CREATE_ACTION,
+  loadAndValidateHistoricalReconstructionWithHighestScopeTarget,
   validateHistoricalReconstructionTargetsForScopes,
 } from "@/lib/historical-reconstruction-db";
 
@@ -103,18 +103,21 @@ async function readIdempotentResult(input: {
         "Deze idempotentiesleutel is al met andere reconstructiegegevens gebruikt.",
       );
     }
-    const aggregate = await tx.hourEntry.aggregate({
-      where: buildHistoricalReconstructionScope({
-        userId: entry.userId,
-        therapistId: entry.therapistId,
-        workPackageId: entry.workPackageId,
-        activityId: entry.activityId,
-        asOf: reportCutoffEnd(provenance.asOf),
-      }),
-      _sum: { hours: true },
-    });
-    const registeredHours = aggregate._sum.hours || 0;
-    validateHistoricalReconstructionIntegrity({ entry, provenance, registeredHours });
+    const reconstruction = await loadAndValidateHistoricalReconstructionWithHighestScopeTarget(
+      tx,
+      entry,
+    );
+    if (!reconstruction) {
+      throw new HistoricalReconstructionConflictError(
+        "De idempotentiesleutel hoort bij een registratie zonder geldige reconstructieprovenance.",
+      );
+    }
+    if (reconstruction.provenance.requestFingerprint !== input.requestFingerprint) {
+      throw new HistoricalReconstructionConflictError(
+        "Deze idempotentiesleutel is al met andere reconstructiegegevens gebruikt.",
+      );
+    }
+    const registeredHours = reconstruction.registeredHours;
     return {
       entry,
       registeredHoursBefore: Math.round((registeredHours - entry.hours) * 100) / 100,
@@ -199,22 +202,21 @@ export async function POST(request: NextRequest) {
               "Deze idempotentiesleutel is al met andere reconstructiegegevens gebruikt.",
             );
           }
-          const existingAggregate = await tx.hourEntry.aggregate({
-            where: buildHistoricalReconstructionScope({
-              userId: existing.userId,
-              therapistId: existing.therapistId,
-              workPackageId: existing.workPackageId,
-              activityId: existing.activityId,
-              asOf: reportCutoffEnd(provenance.asOf),
-            }),
-            _sum: { hours: true },
-          });
-          const registeredHours = existingAggregate._sum.hours || 0;
-          validateHistoricalReconstructionIntegrity({
-            entry: existing,
-            provenance,
-            registeredHours,
-          });
+          const reconstruction = await loadAndValidateHistoricalReconstructionWithHighestScopeTarget(
+            tx,
+            existing,
+          );
+          if (!reconstruction) {
+            throw new HistoricalReconstructionConflictError(
+              "De idempotentiesleutel hoort bij een registratie zonder geldige reconstructieprovenance.",
+            );
+          }
+          if (reconstruction.provenance.requestFingerprint !== requestFingerprint) {
+            throw new HistoricalReconstructionConflictError(
+              "Deze idempotentiesleutel is al met andere reconstructiegegevens gebruikt.",
+            );
+          }
+          const registeredHours = reconstruction.registeredHours;
           return {
             entry: existing,
             registeredHoursBefore:

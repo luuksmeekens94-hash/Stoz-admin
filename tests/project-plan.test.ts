@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   APPROVED_BUDGET_LINES,
+  NON_SUBSIDISED_HOUR_RULES,
   PROJECT_STEERING_CONFIG,
   WORK_PACKAGE_PHASES,
 } from "@/lib/project-plan";
@@ -37,6 +38,20 @@ describe("STOZ Hybride Begrip bronconfiguratie", () => {
     expect(APPROVED_BUDGET_LINES.some((line) => line.label.toLowerCase().includes("huisarts"))).toBe(
       false,
     );
+  });
+
+  it("legt het interne scholingstarief en de uitgestelde websitefactuur als projectbesluit vast", () => {
+    expect(NON_SUBSIDISED_HOUR_RULES).toContainEqual(
+      expect.objectContaining({
+        id: "physiotherapist-training-operational",
+        category: "Fysiotherapeuten",
+        eligibleWorkPackageCodes: ["WP3"],
+        hourlyRate: 35,
+      }),
+    );
+    expect(APPROVED_BUDGET_LINES.find((line) => line.id === "website-builder")).toMatchObject({
+      uninvoicedCostTreatment: "DEFER_TO_LATER_REPORT",
+    });
   });
 
   it("sluit per RVO-rubriek aan op Model B en de beschikkingcorrectie", () => {

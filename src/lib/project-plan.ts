@@ -1,4 +1,4 @@
-import type { FinancialBudgetLine } from "@/lib/financial-steering";
+import type { FinancialBudgetLine, NonSubsidisedHourRule } from "@/lib/financial-steering";
 import type { WorkPackagePhase } from "@/lib/project-steering";
 
 export type ApprovedBudgetSourceStatus =
@@ -114,6 +114,9 @@ export const APPROVED_BUDGET_LINES: FinancialBudgetLine[] = [
     budgetHours: 25,
     hourlyRate: 100,
     budgetEuros: 2_500,
+    uninvoicedCostTreatment: "DEFER_TO_LATER_REPORT",
+    reportingNote:
+      "Projectbesluit 14 augustus 2026: pas als gemaakte kosten opnemen na ontvangst en koppeling van de factuur; tot die tijd €0 actual en geen rapportageblokkade.",
   },
   {
     id: "licenses",
@@ -150,6 +153,18 @@ export const APPROVED_BUDGET_LINES: FinancialBudgetLine[] = [
     costType: "OTHER",
     eligibleWorkPackageCodes: ["WP3"],
     budgetEuros: 645,
+  },
+];
+
+export const NON_SUBSIDISED_HOUR_RULES: NonSubsidisedHourRule[] = [
+  {
+    id: "physiotherapist-training-operational",
+    category: "Fysiotherapeuten",
+    label: "Scholingsdeelname fysiotherapeuten · operationeel buiten Model B",
+    eligibleWorkPackageCodes: ["WP3"],
+    hourlyRate: 35,
+    decisionReference:
+      "Projectbesluit 14 augustus 2026: intern waarderingstarief €35 per uur; transparant tonen maar niet als subsidiabele Model-B-realisatie opvoeren.",
   },
 ];
 

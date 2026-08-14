@@ -22,6 +22,17 @@ export interface FinancialBudgetLine {
   budgetHours?: number;
   hourlyRate?: number;
   budgetEuros: number;
+  uninvoicedCostTreatment?: "BLOCK" | "DEFER_TO_LATER_REPORT";
+  reportingNote?: string;
+}
+
+export interface NonSubsidisedHourRule {
+  id: string;
+  category: string;
+  label: string;
+  eligibleWorkPackageCodes: string[];
+  hourlyRate: number;
+  decisionReference: string;
 }
 
 export interface FinancialHour {
@@ -69,6 +80,7 @@ export interface FinancialSteeringInput {
   overheadRate: number;
   approvedBudgetSourceStatus: ApprovedBudgetSourceStatus;
   approvedBudgetTotalEuros?: number;
+  nonSubsidisedHourRules?: NonSubsidisedHourRule[];
 }
 
 export interface FinancialSteeringRow extends FinancialBudgetLine {
@@ -264,6 +276,7 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
       line.costType === "INTERNAL_LABOUR" || line.costType === "EXTERNAL_LABOUR",
   );
   const unallocatedByCategory = new Map<string, number>();
+  const nonSubsidisedByRule = new Map<string, { rule: NonSubsidisedHourRule; hours: number }>();
   for (const hour of input.hours || []) {
     const hasMatchingLine = labourBudgetLines.some((line) => {
       if (line.category !== hour.category) return false;
@@ -271,6 +284,20 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
       return eligible.length === 0 || eligible.includes(hour.workPackageCode);
     });
     if (hasMatchingLine) continue;
+    const matchingNonSubsidisedRules = (input.nonSubsidisedHourRules || []).filter(
+      (rule) =>
+        rule.category === hour.category &&
+        rule.eligibleWorkPackageCodes.includes(hour.workPackageCode),
+    );
+    if (matchingNonSubsidisedRules.length === 1) {
+      const rule = matchingNonSubsidisedRules[0];
+      const current = nonSubsidisedByRule.get(rule.id);
+      nonSubsidisedByRule.set(rule.id, {
+        rule,
+        hours: hours((current?.hours || 0) + hour.hours),
+      });
+      continue;
+    }
     const category = hour.category || "Geen begrotingskoppeling";
     unallocatedByCategory.set(
       category,
@@ -288,6 +315,13 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
       };
     })
     .sort((a, b) => a.category.localeCompare(b.category, "nl"));
+  const nonSubsidisedHours = Array.from(nonSubsidisedByRule.values())
+    .map(({ rule, hours: classifiedHours }) => ({
+      ...rule,
+      hours: classifiedHours,
+      indicativeEuros: euros(classifiedHours * rule.hourlyRate),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, "nl"));
   const expectedApprovedBudgetEuros =
     input.approvedBudgetTotalEuros ?? approvedBudgetEuros;
   const budgetSourceDifferenceEuros = euros(
@@ -377,7 +411,8 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
     (row) =>
       row.costType === "EXTERNAL_LABOUR" &&
       row.reportableHours > 0 &&
-      row.confirmedInvoiceEuros === 0,
+      row.confirmedInvoiceEuros === 0 &&
+      row.uninvoicedCostTreatment !== "DEFER_TO_LATER_REPORT",
   );
   if (externalRowsWithoutConfirmedCost.length > 0) {
     blockers.add("EXTERNAL_COST_EVIDENCE_INCOMPLETE");
@@ -412,11 +447,29 @@ export function buildFinancialSteeringModel(input: FinancialSteeringInput) {
 
   const blockerList = Array.from(blockers);
   const isReportReady = blockerList.length === 0;
+  const deferredExternalCosts = rows
+    .filter(
+      (row) =>
+        row.costType === "EXTERNAL_LABOUR" &&
+        row.reportableHours > 0 &&
+        row.confirmedInvoiceEuros === 0 &&
+        row.uninvoicedCostTreatment === "DEFER_TO_LATER_REPORT",
+    )
+    .map((row) => ({
+      id: row.id,
+      label: row.label,
+      reportableHours: row.reportableHours,
+      indicativeHoursValueEuros: row.indicativeHoursValueEuros,
+      reportingNote:
+        row.reportingNote || "Pas opnemen na ontvangst en koppeling van de factuur.",
+    }));
 
   return {
     rows,
     sections,
     unallocatedHours,
+    nonSubsidisedHours,
+    deferredExternalCosts,
     totals: {
       approvedBudgetEuros,
       expectedApprovedBudgetEuros,

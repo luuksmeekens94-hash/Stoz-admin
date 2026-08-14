@@ -9,6 +9,7 @@ import {
 } from "@/lib/historical-reconstruction-integrity";
 import {
   validateInterimProposalTarget,
+  validateHistoricalReconstructionScopeTargets,
   HISTORICAL_RECONSTRUCTION_CREATE_ACTIONS,
   isAllowedHistoricalReconstructionTransition,
   loadAndValidateHistoricalReconstruction,
@@ -37,6 +38,13 @@ const normalized: HistoricalReconstructionPayload = {
 };
 
 describe("historische reconstructie-integriteit", () => {
+  it("accepteert een later hoger geattesteerd doel binnen dezelfde reconstructiescope", () => {
+    expect(() => validateHistoricalReconstructionScopeTargets([
+      { registeredHours: 20, confirmedTargetHours: 2 },
+      { registeredHours: 20, confirmedTargetHours: 20 },
+    ])).not.toThrow();
+  });
+
   it("blokkeert goedkeuring als een gekoppeld voorstel functiebreed al boven doel staat", async () => {
     const findMany = vi.fn().mockResolvedValue([
       { userId: "manager-1" },
