@@ -330,7 +330,7 @@ def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path 
         f"Websitebouwer: {nl_number(website_hours)} bevestigde projecturen × €100 = € {nl_money(website_ex_vat)} exclusief btw; voorlopig 21% niet-verrekenbare btw = € {nl_money(website_vat)}. Onderliggende maandfacturen worden intern gereconcilieerd.",
         "Synthesia Creator is voorlopig opgenomen als 12 × €49 = €588. ChatGPT Plus is voorlopig opgenomen als 12 × €22 = €264, gebaseerd op $24,20 per maand en de door de projecteigenaar genoemde euro-afschrijving.",
         "De communicatietraining is voor €645 opgenomen overeenkomstig de gereconcilieerde begrotingsregel en de bevestiging dat de factuur aanwezig is. Het bedrag wordt als totale subsidiabele kostenpost behandeld; er wordt geen extra btw bovenop gezet.",
-        "28 uur scholingsdeelname van fysiotherapeuten is operationeel gewaardeerd tegen €35 per uur, maar conform projectbesluit buiten Model B gehouden. Alleen 20 uur interne opleidersinzet is onder Opleiding opgenomen.",
+        "De verleende begroting hanteert €50 per uur voor praktijkmanagement, praktijkhouders en fysiotherapeuten; voor de 68 subsidiabele fysiotherapeuturen in deze verslagperiode is die verleende begrotingsbasis aangehouden. Omdat fysiotherapeuten een individuele arbeidsovereenkomst en loonstrook hebben, worden hun definitieve werkelijke uurtarieven vóór de eindafrekening per persoon gereconcilieerd volgens de RVO-methode voor werkelijke loonkosten. Een generiek tarief van €35 wordt niet zonder onderliggende individuele berekening toegepast. De 28 uur scholingsdeelname van fysiotherapeuten blijft operationeel buiten Model B; alleen 20 uur interne opleidersinzet is onder Opleiding opgenomen.",
         "De conceptrealisatie bedraagt €38.703,00. De abonnementen en websitekosten zijn op projecteigenaarbevestiging berekend en worden na ontvangst van alle facturen intern op exacte euro- en btw-bedragen gereconcilieerd; de facturen hoeven niet als bijlage bij Model B te worden ingediend.",
     ]
     for row, line in enumerate(notes, start=161):
@@ -340,7 +340,7 @@ def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path 
         cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
         cell.font = Font(name="Arial", size=9, color="0000FF")
         sheet.merge_cells(start_row=row, start_column=2, end_row=row, end_column=6)
-        sheet.row_dimensions[row].height = 30 if len(line) < 140 else 42
+        sheet.row_dimensions[row].height = 90 if len(line) > 400 else 42 if len(line) >= 140 else 30
 
     for worksheet in workbook.worksheets:
         worksheet.sheet_view.showGridLines = False

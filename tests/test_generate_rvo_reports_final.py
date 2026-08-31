@@ -105,6 +105,8 @@ class FinalReportGeneratorTest(unittest.TestCase):
             self.assertEqual(sheet["F139"].value, 645)
             self.assertIn("btw-plichtigheid ‘Nee’", sheet["B163"].value)
             self.assertIn("zonder dubbeltelling", sheet["B163"].value)
+            self.assertIn("68 subsidiabele fysiotherapeuturen", sheet["B168"].value)
+            self.assertIn("niet zonder onderliggende individuele berekening", sheet["B168"].value)
 
             doc = Document(outputs["docx"])
             text = "\n".join([p.text for p in doc.paragraphs] + [cell.text for table in doc.tables for row in table.rows for cell in row.cells])
