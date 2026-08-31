@@ -238,7 +238,21 @@ describe("buildCorrectiveMonthlyPlan", () => {
     expect(originalAugust.suggestions.reduce((sum, row) => sum + row.plannedHours, 0)).toBe(26);
   });
 
-  it("vermindert projectmanagement en externe inzet ongelijk en verschuift gewicht naar implementatie, monitoring en kennisdeling", () => {
+  it("stuurt de toekomstige uren naar exact 940 totaal en beperkt verdere fysiotherapeutoverschrijding", () => {
+    const revised = buildRebalancedFutureMonthlyPlan();
+    const rows = revised.flatMap((month) => month.suggestions);
+    const total = rows.reduce((sum, row) => sum + row.plannedHours, 0);
+    const byRole = (role: string) => rows
+      .filter((row) => row.roleCategory === role)
+      .reduce((sum, row) => sum + row.plannedHours, 0);
+
+    expect(total).toBe(343.5);
+    expect(596.5 + total).toBe(940);
+    expect(byRole("Fysiotherapeuten")).toBe(24);
+    expect(byRole("Extern adviseur")).toBe(68.5);
+  });
+
+  it("vermindert projectmanagement, begrenst externe inzet en verschuift gewicht naar implementatie, monitoring en kennisdeling", () => {
     const original = buildCorrectiveMonthlyPlan().filter((month) => month.monthKey >= "2026-09");
     const revised = buildRebalancedFutureMonthlyPlan();
     const sum = (rows: typeof revised, predicate: (row: (typeof revised)[number]["suggestions"][number]) => boolean) =>
@@ -247,7 +261,7 @@ describe("buildCorrectiveMonthlyPlan", () => {
     expect(sum(revised, (row) => row.budgetLineKey === "PRACTICE_PROJECT_MANAGEMENT"))
       .toBeLessThan(sum(original, (row) => row.budgetLineKey === "PRACTICE_PROJECT_MANAGEMENT"));
     expect(sum(revised, (row) => row.budgetLineKey === "EXTERNAL_PROJECT_MANAGEMENT"))
-      .toBeLessThan(sum(original, (row) => row.budgetLineKey === "EXTERNAL_PROJECT_MANAGEMENT"));
+      .toBeLessThan(107.5);
     expect(sum(revised, (row) => row.budgetLineKey === "PRACTICE_IMPLEMENTATION"))
       .toBeGreaterThan(sum(original, (row) => row.budgetLineKey === "PRACTICE_IMPLEMENTATION"));
     expect(sum(revised, (row) => row.workPackageCode === "WP4")).toBeGreaterThan(0);

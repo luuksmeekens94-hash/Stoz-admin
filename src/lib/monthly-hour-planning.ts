@@ -353,14 +353,14 @@ const REBALANCED_FUTURE_LINES: readonly RebalancedFutureLine[] = [
     budgetLineKey: "EXTERNAL_PROJECT_MANAGEMENT",
     roleCategory: "Extern adviseur",
     label: "Externe project- en innovatiemanager",
-    hoursByMonth: [6, 7, 7, 6.5, 7, 7, 4, 3.5, 2.5, 1.5, 1.5, 1],
+    hoursByMonth: [8, 9, 9, 8.5, 10, 10, 4, 3.5, 2.5, 1.5, 1.5, 1],
     phase: (monthIndex) => phaseCodeFor("EXTERNAL_MANAGEMENT", monthIndex + 1),
   },
   {
     budgetLineKey: "PHYSIOTHERAPIST_IMPLEMENTATION",
     roleCategory: "Fysiotherapeuten",
     label: "Fysiotherapeuten Fy-fit · implementatie",
-    hoursByMonth: [8, 10, 10, 10, 12, 10, 0, 0, 0, 0, 0, 0],
+    hoursByMonth: [4, 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0],
     phase: (monthIndex) => phaseCodeFor("PHYSIOTHERAPISTS", monthIndex + 1),
   },
   {
