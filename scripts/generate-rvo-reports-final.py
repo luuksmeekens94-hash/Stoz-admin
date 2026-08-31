@@ -324,8 +324,8 @@ def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path 
 
     notes = [
         "CONCEPT – peildatum 31 augustus 2026. Gereed voor eindcontrole; nog niet indienen.",
-        "Verleende basis: ingediende Model B-begroting en RVO-beschikking STOZ25-03851282; de beschikking gaat voor bij aangepaste bedragen.",
-        "Fy-fit kan btw voor dit project niet verrekenen. Niet-verrekenbare btw op bevestigde facturen is daarom als projectkosten opgenomen.",
+        "De kolom Verleend volgt ongewijzigd de ingediende begroting en RVO-beschikking STOZ25-03851282. In de oorspronkelijke begroting zijn de externe kosten exclusief btw opgenomen en is geen afzonderlijk btw-bedrag begroot; daarom blijft de verleende kolom bij de beschikking aansluiten.",
+        "De oorspronkelijke begroting vermeldt bij btw-plichtigheid ‘Nee’ en noemt het tarief van de externe project- en innovatiemanager expliciet exclusief btw. Fy-fit kan deze btw niet verrekenen. De werkelijk verschuldigde niet-verrekenbare btw is daarom als subsidiabele projectrealisatie afzonderlijk opgenomen onder Kosten derden – overig, zonder dubbeltelling met de bedragen exclusief btw.",
         f"Externe projectmanagementkosten zijn gebaseerd op facturen 66, 67 en 71: € {nl_money(invoice_ex)} exclusief btw en € {nl_money(invoice_vat)} btw.",
         f"Websitebouwer: {nl_number(website_hours)} bevestigde projecturen × €100 = € {nl_money(website_ex_vat)} exclusief btw; voorlopig 21% niet-verrekenbare btw = € {nl_money(website_vat)}. Onderliggende maandfacturen worden intern gereconcilieerd.",
         "Synthesia Creator is voorlopig opgenomen als 12 × €49 = €588. ChatGPT Plus is voorlopig opgenomen als 12 × €22 = €264, gebaseerd op $24,20 per maand en de door de projecteigenaar genoemde euro-afschrijving.",
