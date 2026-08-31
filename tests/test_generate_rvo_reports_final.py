@@ -83,6 +83,7 @@ class FinalReportGeneratorTest(unittest.TestCase):
             config.write_text(json.dumps({
                 "internalCostUsers": ["Manager Alpha", "Manager Beta", "Manager Gamma", "Therapist Team"],
                 "websiteBuilderUsers": ["Website Supplier"],
+                "physiotherapistCostUsers": ["Therapist Team"],
             }), encoding="utf-8")
             outputs = module.build_reports(snapshot, Path(tmp) / "output", config)
             workbook = load_workbook(outputs["xlsx"], data_only=False)
@@ -95,6 +96,13 @@ class FinalReportGeneratorTest(unittest.TestCase):
 
             self.assertEqual(project_hours, 172)
             self.assertEqual(implementation_hours, 103)
+            implementation_rates = {
+                sheet[f"B{row}"].value: sheet[f"D{row}"].value
+                for row in range(52, 61)
+                if sheet[f"B{row}"].value
+            }
+            self.assertEqual(implementation_rates["Manager Alpha"], 50)
+            self.assertEqual(implementation_rates["Therapist Team"], 35)
             self.assertTrue(all(value in (None, 0, "") for value in learner_cost_inputs))
             self.assertEqual(instructor_hours, 20)
             self.assertEqual(sheet["F75"].value, 2337.5)
@@ -106,7 +114,8 @@ class FinalReportGeneratorTest(unittest.TestCase):
             self.assertIn("btw-plichtigheid ‘Nee’", sheet["B163"].value)
             self.assertIn("zonder dubbeltelling", sheet["B163"].value)
             self.assertIn("68 subsidiabele fysiotherapeuturen", sheet["B168"].value)
-            self.assertIn("niet zonder onderliggende individuele berekening", sheet["B168"].value)
+            self.assertIn("€35 per uur", sheet["B168"].value)
+            self.assertIn("loonstroken", sheet["B168"].value)
 
             doc = Document(outputs["docx"])
             text = "\n".join([p.text for p in doc.paragraphs] + [cell.text for table in doc.tables for row in table.rows for cell in row.cells])

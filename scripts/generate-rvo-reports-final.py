@@ -224,6 +224,7 @@ def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path 
     config = json.loads(private_config_path.read_text(encoding="utf-8"))
     internal_names = set(config["internalCostUsers"])
     website_builder_names = set(config.get("websiteBuilderUsers", ["Lodewijk Tromp"]))
+    physiotherapist_cost_names = set(config.get("physiotherapistCostUsers", ["Fysiotherapeuten Fy-fit"]))
     entries = approved_cutoff_entries(data)
     internal = [entry for entry in entries if entry["user"] in internal_names]
     project_entries = [entry for entry in internal if entry["workPackage"] == "WP1"]
@@ -244,7 +245,7 @@ def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path 
     sheet["C3"] = data["projectName"]
     sheet["F5"] = "Nee"
     sheet["F6"] = "KMO"
-    sheet["F7"] = "N.v.t.; intern begrotingstarief € 50 per uur"
+    sheet["F7"] = "N.v.t.; €50 praktijkmanagement/praktijkhouders en €35 fysiotherapeuten"
     sheet["F8"] = "Opschalingsroute"
     sheet["F9"] = data["approvedSubsidy"]
 
@@ -265,7 +266,7 @@ def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path 
             else:
                 sheet[f"B{row}"] = name
                 sheet[f"C{row}"] = "Loondienst"
-            sheet[f"D{row}"] = 50
+            sheet[f"D{row}"] = 35 if name in physiotherapist_cost_names else 50
             sheet[f"E{row}"] = sum_hours(person_entries)
             for column in ("B", "C", "D", "E"):
                 sheet[f"{column}{row}"].font = input_font
@@ -330,8 +331,8 @@ def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path 
         f"Websitebouwer: {nl_number(website_hours)} bevestigde projecturen × €100 = € {nl_money(website_ex_vat)} exclusief btw; voorlopig 21% niet-verrekenbare btw = € {nl_money(website_vat)}. Onderliggende maandfacturen worden intern gereconcilieerd.",
         "Synthesia Creator is voorlopig opgenomen als 12 × €49 = €588. ChatGPT Plus is voorlopig opgenomen als 12 × €22 = €264, gebaseerd op $24,20 per maand en de door de projecteigenaar genoemde euro-afschrijving.",
         "De communicatietraining is voor €645 opgenomen overeenkomstig de gereconcilieerde begrotingsregel en de bevestiging dat de factuur aanwezig is. Het bedrag wordt als totale subsidiabele kostenpost behandeld; er wordt geen extra btw bovenop gezet.",
-        "De verleende begroting hanteert €50 per uur voor praktijkmanagement, praktijkhouders en fysiotherapeuten; voor de 68 subsidiabele fysiotherapeuturen in deze verslagperiode is die verleende begrotingsbasis aangehouden. Omdat fysiotherapeuten een individuele arbeidsovereenkomst en loonstrook hebben, worden hun definitieve werkelijke uurtarieven vóór de eindafrekening per persoon gereconcilieerd volgens de RVO-methode voor werkelijke loonkosten. Een generiek tarief van €35 wordt niet zonder onderliggende individuele berekening toegepast. De 28 uur scholingsdeelname van fysiotherapeuten blijft operationeel buiten Model B; alleen 20 uur interne opleidersinzet is onder Opleiding opgenomen.",
-        "De conceptrealisatie bedraagt €38.703,00. De abonnementen en websitekosten zijn op projecteigenaarbevestiging berekend en worden na ontvangst van alle facturen intern op exacte euro- en btw-bedragen gereconcilieerd; de facturen hoeven niet als bijlage bij Model B te worden ingediend.",
+        "Voor praktijkmanagement en praktijkhouders is €50 per uur aangehouden. Op besluit van de projecteigenaar zijn de 68 subsidiabele fysiotherapeuturen in deze verslagperiode gewaardeerd tegen €35 per uur. De fysiotherapeuten hebben een individuele arbeidsovereenkomst en loonstrook; vóór de eindafrekening wordt het gehanteerde tarief per persoon met de loonstroken en de RVO-methode voor werkelijke loonkosten gereconcilieerd. De 28 uur scholingsdeelname van fysiotherapeuten blijft operationeel buiten Model B; alleen 20 uur interne opleidersinzet is onder Opleiding opgenomen.",
+        "De conceptrealisatie bedraagt €37.530,00. De abonnementen, websitekosten en fysiotherapeuttarieven worden na ontvangst van alle onderliggende stukken intern op exacte euro-, btw- en loonkostenbedragen gereconcilieerd; de facturen en loonstroken hoeven niet als bijlage bij Model B te worden ingediend.",
     ]
     for row, line in enumerate(notes, start=161):
         cell = cast(Cell, sheet.cell(row=row, column=2))
