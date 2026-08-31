@@ -220,9 +220,10 @@ def clear_input_rows(sheet: Any, rows: range, columns: tuple[str, ...]) -> None:
             sheet[f"{column}{row}"] = None
 
 
-def build_model_b(data: dict[str, Any], output: Path) -> None:
-    config = json.loads(PRIVATE_CONFIG.read_text(encoding="utf-8"))
+def build_model_b(data: dict[str, Any], output: Path, private_config_path: Path = PRIVATE_CONFIG) -> None:
+    config = json.loads(private_config_path.read_text(encoding="utf-8"))
     internal_names = set(config["internalCostUsers"])
+    website_builder_names = set(config.get("websiteBuilderUsers", ["Lodewijk Tromp"]))
     entries = approved_cutoff_entries(data)
     internal = [entry for entry in entries if entry["user"] in internal_names]
     project_entries = [entry for entry in internal if entry["workPackage"] == "WP1"]
@@ -289,7 +290,7 @@ def build_model_b(data: dict[str, Any], output: Path) -> None:
 
     website_entries = [
         entry for entry in entries
-        if entry["user"] == "Lodewijk Tromp" and entry["workPackage"] == "WP2"
+        if entry["user"] in website_builder_names and entry["workPackage"] == "WP2"
     ]
     website_hours = sum_hours(website_entries)
     website_ex_vat = round2(website_hours * 100)
@@ -353,7 +354,11 @@ def build_model_b(data: dict[str, Any], output: Path) -> None:
     workbook.save(output)
 
 
-def build_reports(snapshot_path: Path, output_dir: Path) -> dict[str, Path]:
+def build_reports(
+    snapshot_path: Path,
+    output_dir: Path,
+    private_config_path: Path = PRIVATE_CONFIG,
+) -> dict[str, Path]:
     data = json.loads(snapshot_path.read_text(encoding="utf-8"))
     if data.get("asOf") != "2026-08-31":
         raise ValueError("De rapportagesnapshot moet exact peildatum 2026-08-31 hebben.")
@@ -364,7 +369,7 @@ def build_reports(snapshot_path: Path, output_dir: Path) -> dict[str, Path]:
     docx = output_dir / "CONCEPT-Model-D-Voortgangsverslag-Hybride-Begrip-2026-08-31.docx"
     xlsx = output_dir / "CONCEPT-Model-B-Financieel-Voortgangsverslag-Hybride-Begrip-2026-08-31.xlsx"
     build_model_d(data, docx)
-    build_model_b(data, xlsx)
+    build_model_b(data, xlsx, private_config_path)
     return {"docx": docx, "xlsx": xlsx}
 
 

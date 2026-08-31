@@ -36,17 +36,17 @@ def entry(user, work_package, activity, hours, therapist=None, date="2026-08-31"
 
 def snapshot_fixture():
     entries = [
-        entry("Marion Brouwer", "WP1", "A1.1", 100),
-        entry("Sjoerd Hendriks", "WP1", "A1.1", 50),
-        entry("Heidi Staring", "WP1", "A1.1", 22),
-        entry("Luuk Smeekens", "WP1", "A1.1", 217.5),
-        entry("Fysiotherapeuten Fy-fit", "WP2", "A2.1", 68),
-        entry("Marion Brouwer", "WP2", "A2.2", 15),
-        entry("Marion Brouwer", "WP5", "A5.1", 8),
-        entry("Marion Brouwer", "WP6", "A6.1", 12),
-        entry("Marion Brouwer", "WP3", "A3.1", 20),
-        entry("Fysiotherapeuten Fy-fit", "WP3", "A3.1", 28, therapist="Testfysiotherapeut"),
-        entry("Lodewijk Tromp", "WP2", "A2.3", 56),
+        entry("Manager Alpha", "WP1", "A1.1", 100),
+        entry("Manager Beta", "WP1", "A1.1", 50),
+        entry("Manager Gamma", "WP1", "A1.1", 22),
+        entry("External Advisor", "WP1", "A1.1", 217.5),
+        entry("Therapist Team", "WP2", "A2.1", 68),
+        entry("Manager Alpha", "WP2", "A2.2", 15),
+        entry("Manager Alpha", "WP5", "A5.1", 8),
+        entry("Manager Alpha", "WP6", "A6.1", 12),
+        entry("Manager Alpha", "WP3", "A3.1", 20),
+        entry("Therapist Team", "WP3", "A3.1", 28, therapist="Test Therapist"),
+        entry("Website Supplier", "WP2", "A2.3", 56),
     ]
     invoices = [
         {"number": "66", "amountExVat": 5180, "vatAmount": 1088, "confirmedBudgetLineId": "external-project-manager", "vatTreatment": "INCLUDED_CONFIRMED", "hasEvidence": True},
@@ -79,7 +79,12 @@ class FinalReportGeneratorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             snapshot = Path(tmp) / "snapshot.json"
             snapshot.write_text(json.dumps(snapshot_fixture()), encoding="utf-8")
-            outputs = module.build_reports(snapshot, Path(tmp) / "output")
+            config = Path(tmp) / "report-config.json"
+            config.write_text(json.dumps({
+                "internalCostUsers": ["Manager Alpha", "Manager Beta", "Manager Gamma", "Therapist Team"],
+                "websiteBuilderUsers": ["Website Supplier"],
+            }), encoding="utf-8")
+            outputs = module.build_reports(snapshot, Path(tmp) / "output", config)
             workbook = load_workbook(outputs["xlsx"], data_only=False)
             sheet = workbook["Aanvrager-Penvoerder"]
 
