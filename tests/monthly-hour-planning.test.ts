@@ -294,6 +294,31 @@ describe("buildCorrectiveMonthlyPlan", () => {
     expect(entries.every((entry) => entry.note.length >= 20)).toBe(true);
   });
 
+  it("vertaalt de resterende Model-D-verplichtingen naar concrete maandproducten en bewijs", () => {
+    const plan = buildRebalancedFutureMonthlyPlan();
+    const catalog = {
+      Praktijkmanagement: ["Heidi Staring"],
+      "Extern adviseur": ["Luuk Smeekens"],
+      Fysiotherapeuten: ["Anouk Peters"],
+      "Front/backoffice": ["Marion Brouwer", "Sjoerd Hendriks"],
+      "Interne opleider": ["Marion Brouwer"],
+    };
+    const noteFor = (monthKey: string, activityCode: string) => {
+      const suggestion = plan.find((month) => month.monthKey === monthKey)!.suggestions
+        .find((row) => row.activityCode === activityCode)!;
+      return buildForecastEntrySuggestions(suggestion, catalog)[0].note;
+    };
+
+    expect(noteFor("2026-09", "A3.2")).toMatch(/quick guide|werkinstructie/i);
+    expect(noteFor("2026-09", "A4.1")).toMatch(/5–8 fysiotherapeuten|Physitrack/i);
+    expect(noteFor("2026-10", "A6.1")).toMatch(/websitebezoek|videoweergaven|onderwerp, taal en kanaal/i);
+    expect(noteFor("2026-11", "A5.1")).toMatch(/huisarts|taal-/i);
+    expect(noteFor("2027-01", "A4.2")).toMatch(/praktijkbrede uitrol|protocol|B1/i);
+    expect(noteFor("2027-05", "A5.2")).toMatch(/VGZ|geen contractwijziging/i);
+    expect(noteFor("2027-06", "A6.2")).toMatch(/evaluatie|impact|bijsturing/i);
+    expect(noteFor("2027-08", "A6.2")).toMatch(/eindrapport|overdracht|borging/i);
+  });
+
   it("blokkeert forecastdetails wanneer geen echte uitvoerder beschikbaar is", () => {
     const suggestion = buildRebalancedFutureMonthlyPlan()
       .flatMap((month) => month.suggestions)

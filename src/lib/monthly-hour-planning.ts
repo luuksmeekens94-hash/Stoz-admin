@@ -576,22 +576,59 @@ function preferredPlanningDates(
   });
 }
 
-function forecastWorkDescription(
-  suggestion: Pick<MonthlyPlanSuggestion, "workPackageCode" | "activityCode">,
+export function forecastWorkDescription(
+  suggestion: Pick<MonthlyPlanSuggestion, "monthKey" | "workPackageCode" | "activityCode">,
 ) {
+  const monthlyDeliverables: Record<string, string> = {
+    "2026-09|A3.2": "Quick guide, demosessie en werkinstructie voor gebruik van Physitrack-content afgerond. Bewijs: instructiedocument en deelnemers-/besluitenlijst.",
+    "2026-10|A3.2": "Eerste gebruiksgroep on-the-job ondersteund en praktische vragen verwerkt. Bewijs: ondersteuningslog en aangepaste werkinstructie.",
+    "2026-09|A4.1": "Eerste gebruiksgroep van circa 5–8 fysiotherapeuten in Meijhorst gestart met de gepubliceerde Physitrack-video’s. Bewijs: startlijst, gebruiksafspraak en intern platformbewijs.",
+    "2026-10|A4.1": "Pilotgebruik door circa 5–8 fysiotherapeuten begeleid; begrijpelijkheid, toepasbaarheid en eerste cliëntfeedback gevolgd. Bewijs: gebruiksregistratie en geanonimiseerde feedbacksamenvatting.",
+    "2026-11|A4.1": "Pilotgebruik voortgezet; knelpunten in begrijpelijkheid en werkproces verwerkt. Bewijs: pilotlog en wijzigingslijst content/werkwijze.",
+    "2026-12|A4.1": "Pilot Meijhorst geëvalueerd en besluit voor praktijkbrede uitrol voorbereid. Bewijs: evaluatieverslag en goedgekeurd uitrolbesluit.",
+    "2027-01|A4.2": "Praktijkbrede uitrol gestart met vaste gebruiksmomenten, B1-webinformatie en protocolafspraken. Bewijs: protocol, publicatieoverzicht en teamcommunicatie.",
+    "2027-02|A4.2": "Uitrol naar betrokken locaties afgerond en toepassing in intake/behandeling gestandaardiseerd. Bewijs: locatiecheck, werkafspraak en gebruiksoverzicht.",
+    "2026-09|A5.1": "Herbruikbare projectmaterialen voor kennisdeling geselecteerd en wijkpartners geprioriteerd. Bewijs: materialenregister en partnerlijst.",
+    "2026-10|A5.1": "Eerste kennisdelingsmoment met wijkpartners voorbereid. Bewijs: uitnodiging, agenda en gedeelde materialen.",
+    "2026-11|A5.1": "Kennisdeling met huisartsen en taal-/doelgroepexpertise voorbereid en intern afgestemd. Bewijs: agenda, presentatie en besluitenlijst.",
+    "2026-12|A5.1": "Eerste kennisdelings- of klankbordmoment met wijkpartner uitgevoerd en vervolgvragen vastgelegd. Bewijs: presentielijst/notulen en actielijst.",
+    "2027-01|A5.1": "Praktijkervaringen en eerste gebruikslessen vertaald naar deelbaar materiaal. Bewijs: factsheet of presentatieversie.",
+    "2027-02|A5.1": "Tweede kennisdelingsmoment voorbereid met focus op toepasbaarheid voor verwijzers en welzijn. Bewijs: agenda en materialen.",
+    "2027-03|A5.1": "Extern kennisdelingsmoment met wijkpartners uitgevoerd. Bewijs: presentielijst/notulen en gedeelde materialen.",
+    "2027-04|A5.1": "Tweede extern kennisdelingsmoment uitgevoerd en lessen verwerkt. Bewijs: verslag, feedback en verbeterlijst.",
+    "2027-05|A5.1": "Kennisdelingsresultaten gebundeld voor regionale verspreiding. Bewijs: definitieve factsheet/presentatie.",
+    "2027-05|A5.2": "Eerste gebruiks- en evaluatieresultaten voor adviserend overleg met VGZ gebundeld. Bewijs: onderbouwingsnotitie en agenda; geen contractwijziging als resultaat verondersteld.",
+    "2027-06|A5.2": "Resultaten met VGZ gedeeld en mogelijke relevantie voor bredere digitale/hybride ontwikkelingen verkend. Bewijs: gespreksverslag en adviespunten.",
+    "2027-07|A5.2": "Adviserende terugkoppeling van VGZ verwerkt en afwijking van de oorspronkelijke borgingsverwachting vastgelegd. Bewijs: besluitenlijst en continuïteitsnotitie.",
+    "2027-08|A5.2": "Resultaten en geleerde lessen extern gedeeld; adviserend traject met VGZ administratief afgerond. Bewijs: eindterugkoppeling en overdrachtsset.",
+    "2026-09|A6.1": "Gebruiksregistratie, cliëntmicrofeedback en fysiotherapeutnulmeting operationeel ingericht. Bewijs: meetprotocol en werkende formulieren.",
+    "2026-10|A6.1": "Nulmeting, cliëntfeedback en gebruiksregistratie voor de eerste groep verzameld; websitebezoek, videoweergaven en Physitrack-aanbod waar mogelijk uitgesplitst naar onderwerp, taal en kanaal. Bewijs: geanonimiseerde export en datakwaliteitscheck.",
+    "2026-11|A6.1": "Eerste gebruikssignalen en feedback geanalyseerd; verbeteracties bepaald. Bewijs: monitoringsrapport en actielijst.",
+    "2026-12|A6.1": "Vervolgmeting pilot afgerond en besluit voor uitrol onderbouwd. Bewijs: vergelijking nul/vervolg en besluitnotitie.",
+    "2027-01|A6.1": "Gebruik tijdens praktijkbrede uitrol gemonitord en ontbrekende registraties nagejaagd. Bewijs: maandexport en kwaliteitscontrole.",
+    "2027-02|A6.1": "Gebruik, cliëntfeedback en fysiotherapeutervaring na uitrol samengevat. Bewijs: monitoringssamenvatting.",
+    "2027-03|A6.2": "Tussenevaluatie uitgevoerd en bijsturing voor borging vastgesteld. Bewijs: evaluatieverslag en besluitenlijst.",
+    "2027-04|A6.2": "Effect- en procesindicatoren opnieuw beoordeeld; open meetgaten gesloten. Bewijs: bijgewerkt meetoverzicht.",
+    "2027-05|A6.2": "Impact, werkdruk en toegankelijkheid tussentijds geanalyseerd zonder onbewezen claims. Bewijs: analysememo met bronverwijzingen.",
+    "2027-06|A6.2": "Evaluatie met cliënten en fysiotherapeuten vertaald naar concrete bijsturing. Bewijs: geanonimiseerde resultaten en verbeterplan.",
+    "2027-07|A6.2": "Eindevaluatie voorbereid en bewijsdossier op volledigheid gecontroleerd. Bewijs: concept-eindrapport en dossiercheck.",
+    "2027-08|A6.2": "Eindrapport, overdracht en borging afgerond. Bewijs: definitief evaluatierapport, overdrachtsset en eindbesluit.",
+  };
+  const specific = monthlyDeliverables[`${suggestion.monthKey}|${suggestion.activityCode}`];
+  if (specific) return specific;
   const descriptions: Record<string, string> = {
-    "WP1|A1.1": "Projectvoortgang besproken, besluiten voorbereid en concrete vervolgacties afgestemd.",
-    "WP3|A3.1": "Communicatietraining voorbereid, uitgevoerd en met het behandelteam geëvalueerd.",
-    "WP3|A3.2": "Interne instructie voorbereid en praktische ondersteuning voor collega's uitgewerkt.",
-    "WP4|A4.1": "Eerste implementatiestappen begeleid, werkafspraken getest en praktijkfeedback verwerkt.",
-    "WP4|A4.2": "Implementatie bijgesteld en vervolguitrol naar betrokken locaties praktisch begeleid.",
-    "WP5|A5.1": "Praktijkervaringen gebundeld en een concreet kennisdelingsmoment voorbereid.",
-    "WP5|A5.2": "Borgingsafspraken uitgewerkt en kennisdeling met betrokken partners georganiseerd.",
-    "WP6|A6.1": "Indicatoren ingericht, gebruikssignalen verzameld en de eerste monitoring bijgewerkt.",
-    "WP6|A6.2": "Monitoringsuitkomsten geëvalueerd en verbeteracties voor borging en overdracht vastgelegd.",
+    "WP1|A1.1": "Projectvoortgang besproken, besluiten voorbereid en concrete vervolgacties afgestemd. Bewijs: maandbesluiten en bijgewerkte planning.",
+    "WP3|A3.1": "Communicatietraining voorbereid, uitgevoerd en met het behandelteam geëvalueerd. Bewijs: materiaal, presentie en evaluatie.",
+    "WP3|A3.2": "Interne instructie voorbereid en praktische ondersteuning voor collega's uitgewerkt. Bewijs: werkinstructie en ondersteuningslog.",
+    "WP4|A4.1": "Eerste implementatiestappen begeleid, werkafspraken getest en praktijkfeedback verwerkt. Bewijs: pilotlog en besluitenlijst.",
+    "WP4|A4.2": "Implementatie bijgesteld en vervolguitrol naar betrokken locaties praktisch begeleid. Bewijs: locatiecheck en werkafspraak.",
+    "WP5|A5.1": "Praktijkervaringen gebundeld en een concreet kennisdelingsmoment voorbereid. Bewijs: materiaal en agenda/verslag.",
+    "WP5|A5.2": "Borgingsafspraken uitgewerkt en kennisdeling met betrokken partners georganiseerd. Bewijs: afspraken- en verspreidingsdocument.",
+    "WP6|A6.1": "Indicatoren ingericht, gebruikssignalen verzameld en de eerste monitoring bijgewerkt. Bewijs: meetexport en monitoringsnotitie.",
+    "WP6|A6.2": "Monitoringsuitkomsten geëvalueerd en verbeteracties voor borging en overdracht vastgelegd. Bewijs: evaluatie en besluitenlijst.",
   };
   return descriptions[`${suggestion.workPackageCode}|${suggestion.activityCode}`]
-    || "Werkzaamheden voorbereid, uitgevoerd en met de betrokken projectleden afgestemd.";
+    || "Werkzaamheden voorbereid, uitgevoerd en met de betrokken projectleden afgestemd. Bewijs: concrete oplevering en besluitenlijst.";
 }
 
 export function buildForecastEntrySuggestions(
