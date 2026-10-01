@@ -88,6 +88,24 @@ describe("MonthlyPlanningApprovalBoard", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it("kan een achterstallige maand met een duidelijke aparte kop tonen", () => {
+    render(
+      <MonthlyPlanningApprovalBoard
+        heading="September eerst vrijgeven"
+        description="Keur eerst de achterstallige planning goed."
+        months={[{
+          monthKey: "2026-09",
+          monthLabel: "september 2026",
+          totalHours: 8,
+          reviewState: "DRAFT",
+          roles: [{ label: "Praktijkmanagement", hours: 8, detailCount: 1 }],
+        }]}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "September eerst vrijgeven" })).toBeInTheDocument();
+    expect(screen.getByText("Keur eerst de achterstallige planning goed.")).toBeInTheDocument();
+  });
+
   it("laat een goedgekeurde maand met een concrete reden auditbaar heropenen", async () => {
     render(
       <MonthlyPlanningApprovalBoard

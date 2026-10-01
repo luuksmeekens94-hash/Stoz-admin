@@ -9,6 +9,7 @@ import MonthlyPlanningApprovalBoard, {
 import PastPlanningReconciliation from "@/components/PastPlanningReconciliation";
 import { getSession } from "@/lib/auth";
 import { loadPlannedHourActors } from "@/lib/planned-hour-prefill";
+import { shouldShowPlanningApprovalMonth } from "@/lib/planning-approval-visibility";
 import { loadReviewedPlanningHours } from "@/lib/reviewed-planning-hours";
 import {
   buildCorrectiveMonthlyPlan,
@@ -166,7 +167,6 @@ export default async function HoursPlanningPage() {
     >();
     for (const allocation of latestVersion.allocations) {
       const key = monthKey(allocation.monthStart);
-      if (key < currentMonth) continue;
       const month = grouped.get(key) || {
         totalHours: 0,
         reviewState: "REVIEWED" as const,
@@ -181,6 +181,7 @@ export default async function HoursPlanningPage() {
       grouped.set(key, month);
     }
     for (const [key, month] of Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+      if (!shouldShowPlanningApprovalMonth({ monthKey: key, currentMonth, reviewState: month.reviewState })) continue;
       approvalMonths.push({
         monthKey: key,
         monthLabel: new Date(`${key}-01T00:00:00.000Z`).toLocaleDateString("nl-NL", {
@@ -200,6 +201,8 @@ export default async function HoursPlanningPage() {
       });
     }
   }
+  const overdueApprovalMonths = approvalMonths.filter((month) => month.monthKey < currentMonth);
+  const currentAndFutureApprovalMonths = approvalMonths.filter((month) => month.monthKey >= currentMonth);
 
   return (
     <div className="space-y-8">
@@ -235,10 +238,18 @@ export default async function HoursPlanningPage() {
         </div>
       </section>
 
+      {latestVersion && overdueApprovalMonths.length > 0 && (
+        <MonthlyPlanningApprovalBoard
+          months={overdueApprovalMonths}
+          heading="September eerst goedkeuren"
+          description="Deze afgesloten planmaand stond nog op concept. Keur de planning eerst goed; daarna verschijnt september direct bij de werkelijke urencontrole."
+        />
+      )}
+
       <PastPlanningReconciliation rows={pastPlanningRows} actors={plannedHourActors} />
 
-      {latestVersion && approvalMonths.length > 0 && (
-        <MonthlyPlanningApprovalBoard months={approvalMonths} />
+      {latestVersion && currentAndFutureApprovalMonths.length > 0 && (
+        <MonthlyPlanningApprovalBoard months={currentAndFutureApprovalMonths} />
       )}
 
       <section className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-950">

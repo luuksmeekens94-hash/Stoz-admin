@@ -24,9 +24,13 @@ function formatHours(value: number) {
 export default function MonthlyPlanningApprovalBoard({
   months,
   compact = false,
+  heading = "Maandelijks uren klaarzetten en goedkeuren",
+  description = "Controleer de uren per functie. Met één knop keur je alle concrete forecastregels van de maand goed.",
 }: {
   months: MonthlyPlanningApprovalMonth[];
   compact?: boolean;
+  heading?: string;
+  description?: string;
 }) {
   const router = useRouter();
   const [savingMonth, setSavingMonth] = useState("");
@@ -91,9 +95,9 @@ export default function MonthlyPlanningApprovalBoard({
     <section className={compact ? "rounded-xl border border-emerald-200 bg-emerald-50/40 p-5" : "card border-blue-200 bg-blue-50/40"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          {!compact && <h2 className="text-xl font-semibold text-blue-950">Maandelijks uren klaarzetten en goedkeuren</h2>}
+          {!compact && <h2 className="text-xl font-semibold text-blue-950">{heading}</h2>}
           <p className={`mt-1 text-sm ${compact ? "text-emerald-950" : "text-blue-900"}`}>
-            Controleer de uren per functie. Met één knop keur je alle concrete forecastregels van de maand goed.
+            {description}
           </p>
         </div>
         <div className="flex gap-2 text-xs">

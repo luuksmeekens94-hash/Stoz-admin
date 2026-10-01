@@ -1,5 +1,6 @@
 import type { MonthlyPlanningApprovalMonth } from "@/components/MonthlyPlanningApprovalBoard";
 import { prisma } from "@/lib/prisma";
+import { shouldShowPlanningApprovalMonth } from "@/lib/planning-approval-visibility";
 
 function monthKey(date: Date) {
   return date.toISOString().slice(0, 7);
@@ -27,7 +28,6 @@ export async function loadMonthlyApprovalMonths(currentMonth: string) {
   >();
   for (const allocation of latestVersion.allocations) {
     const key = monthKey(allocation.monthStart);
-    if (key < currentMonth) continue;
     const month = grouped.get(key) || {
       totalHours: 0,
       reviewState: "REVIEWED" as const,
@@ -44,6 +44,11 @@ export async function loadMonthlyApprovalMonths(currentMonth: string) {
 
   return Array.from(grouped.entries())
     .sort(([a], [b]) => a.localeCompare(b))
+    .filter(([key, month]) => shouldShowPlanningApprovalMonth({
+      monthKey: key,
+      currentMonth,
+      reviewState: month.reviewState,
+    }))
     .map(([key, month]): MonthlyPlanningApprovalMonth => ({
       monthKey: key,
       monthLabel: new Date(`${key}-01T00:00:00.000Z`).toLocaleDateString("nl-NL", {

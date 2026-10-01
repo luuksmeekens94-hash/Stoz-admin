@@ -82,8 +82,16 @@ describe("PastPlanningReconciliation", () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it("blijft fail-closed zolang uitvoerder, bron of uitvoeringsbevestiging ontbreekt", () => {
+  it("legt bij een te vroege klik precies uit wat nog ontbreekt en wijzigt niets", async () => {
     render(<PastPlanningReconciliation rows={rows} actors={actors} />);
-    expect(screen.getByRole("button", { name: /augustus 2026 registreren en goedkeuren/i })).toBeDisabled();
+    const button = screen.getByRole("button", { name: /augustus 2026 registreren en goedkeuren/i });
+    expect(button).toBeEnabled();
+
+    fireEvent.click(button);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/kies voor 1 regel de werkelijke uitvoerder/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/vul een bron of onderbouwing/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/vink de bevestiging aan/i);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

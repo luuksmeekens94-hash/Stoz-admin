@@ -35,6 +35,7 @@ export default function PastPlanningReconciliation({
   const [confirmations, setConfirmations] = useState<Record<string, boolean>>({});
   const [savingMonth, setSavingMonth] = useState("");
   const [error, setError] = useState("");
+  const [errorMonth, setErrorMonth] = useState("");
   const [success, setSuccess] = useState("");
 
   if (months.length === 0) return null;
@@ -42,10 +43,20 @@ export default function PastPlanningReconciliation({
   async function reconcileMonth(monthKey: string, monthLabel: string, monthRows: PastPlanningRow[]) {
     const sourceReference = (sources[monthKey] || "").trim();
     const selectedActors = monthRows.map((row) => actors.find((actor) => actor.key === actorKeys[row.id]));
-    if (sourceReference.length < 20 || !confirmations[monthKey] || selectedActors.some((actor) => !actor)) return;
+    const missingActorCount = selectedActors.filter((actor) => !actor).length;
+    const missing: string[] = [];
+    if (missingActorCount > 0) missing.push(`Kies voor ${missingActorCount} regel${missingActorCount === 1 ? "" : "s"} de werkelijke uitvoerder.`);
+    if (sourceReference.length < 20) missing.push("Vul een bron of onderbouwing van minimaal 20 tekens in.");
+    if (!confirmations[monthKey]) missing.push("Vink de bevestiging aan dat de werkzaamheden echt zijn uitgevoerd.");
+    if (missing.length > 0) {
+      setError(missing.join(" "));
+      setErrorMonth(monthKey);
+      return;
+    }
 
     setSavingMonth(monthKey);
     setError("");
+    setErrorMonth(monthKey);
     setSuccess("");
     try {
       const response = await fetch(`/api/hours/planning/months/${monthKey}/reconcile`, {
@@ -67,6 +78,7 @@ export default function PastPlanningReconciliation({
         return;
       }
       setSuccess(`${payload.approvedCount} urenregels van ${monthLabel} zijn als werkelijk uitgevoerd geregistreerd en goedgekeurd.`);
+      setErrorMonth("");
       router.refresh();
     } catch {
       setError(`Verbindingsfout bij het verwerken van ${monthLabel}.`);
@@ -85,7 +97,6 @@ export default function PastPlanningReconciliation({
         </p>
       </div>
 
-      {error && <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
       {success && <div role="status" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{success}</div>}
 
       <div className="mt-5 space-y-5">
@@ -93,7 +104,6 @@ export default function PastPlanningReconciliation({
           const monthLabel = monthRows[0].monthLabel;
           const total = monthRows.reduce((sum, row) => sum + row.plannedHours, 0);
           const allActorsSelected = monthRows.every((row) => actors.some((actor) => actor.key === actorKeys[row.id]));
-          const canSubmit = allActorsSelected && (sources[monthKey] || "").trim().length >= 20 && confirmations[monthKey] && savingMonth !== monthKey;
           return (
             <article key={monthKey} className="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-4 py-3">
@@ -117,7 +127,7 @@ export default function PastPlanningReconciliation({
                       <label className="sr-only" htmlFor={`actor-${row.id}`}>Werkelijke uitvoerder voor {row.executorName}</label>
                       <select
                         id={`actor-${row.id}`}
-                        className="input py-2 text-sm"
+                        className={`input py-2 text-sm ${actorKeys[row.id] ? "" : "border-red-400 bg-red-50"}`}
                         value={actorKeys[row.id] || ""}
                         onChange={(event) => setActorKeys((current) => ({ ...current, [row.id]: event.target.value }))}
                       >
@@ -158,10 +168,13 @@ export default function PastPlanningReconciliation({
                   <span>Ik bevestig dat alle geselecteerde werkzaamheden daadwerkelijk zijn uitgevoerd op de getoonde datum, door de gekozen uitvoerder en voor het getoonde aantal uren.</span>
                 </label>
                 {!allActorsSelected && <p className="text-sm font-medium text-amber-800">Kies eerst voor iedere regel de werkelijke uitvoerder.</p>}
+                {error && errorMonth === monthKey && (
+                  <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800">{error}</div>
+                )}
                 <button
                   type="button"
-                  className="btn-success w-full sm:w-auto"
-                  disabled={!canSubmit}
+                  className="btn-success w-full disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                  disabled={savingMonth === monthKey}
                   onClick={() => reconcileMonth(monthKey, monthLabel, monthRows)}
                   aria-label={`${monthLabel} registreren en goedkeuren`}
                 >
