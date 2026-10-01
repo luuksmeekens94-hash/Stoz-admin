@@ -18,7 +18,8 @@ describe("loadReviewedPlanningHours", () => {
       },
     ]);
 
-    await expect(loadReviewedPlanningHours({ forecastEntry: { findMany } } as never)).resolves.toEqual([
+    const findAudits = vi.fn().mockResolvedValue([]);
+    await expect(loadReviewedPlanningHours({ forecastEntry: { findMany }, auditEvent: { findMany: findAudits } } as never)).resolves.toEqual([
       {
         id: "forecast-1",
         plannedDate: "2026-08-10",
@@ -40,5 +41,28 @@ describe("loadReviewedPlanningHours", () => {
         },
       },
     }));
+  });
+
+  it("verbergt forecastregels die al door een goedgekeurde historische reconstructie zijn afgedekt", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "forecast-covered",
+        plannedDate: new Date("2026-08-10T00:00:00.000Z"),
+        executorName: "Luuk Smeekens",
+        plannedHours: 3,
+        note: "Projectsturing uitgevoerd.",
+        allocation: {
+          monthStart: new Date("2026-08-01T00:00:00.000Z"),
+          workPackage: { code: "WP1" },
+          activity: { code: "A1.1", name: "Projectmanagement" },
+        },
+      },
+    ]);
+    const findAudits = vi.fn().mockResolvedValue([{ entityId: "forecast-covered" }]);
+
+    await expect(loadReviewedPlanningHours({
+      forecastEntry: { findMany },
+      auditEvent: { findMany: findAudits },
+    } as never)).resolves.toEqual([]);
   });
 });

@@ -73,7 +73,7 @@ export default function PastPlanningReconciliation({
         setError(payload?.error || `De uren van ${monthLabel} konden niet worden goedgekeurd.`);
         return;
       }
-      setSuccess(`${payload.approvedCount} urenregels van ${monthLabel} zijn als werkelijk uitgevoerd geregistreerd en goedgekeurd.`);
+      setSuccess(`${payload.approvedCount} urenregels van ${monthLabel} zijn auditbaar bevestigd en afgehandeld.`);
       setErrorMonth("");
       router.refresh();
     } catch {

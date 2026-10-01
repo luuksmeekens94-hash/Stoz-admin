@@ -6,8 +6,10 @@ import { databaseAmsterdamDateKey } from "@/lib/hour-entry-db";
 import { HourInputError, validateUserTherapistPairing } from "@/lib/hour-entry-validation";
 import {
   assertNoOrdinaryEntryOverlapsHistoricalReconstruction,
+  partitionEntriesCoveredByHistoricalReconstruction,
   validateHistoricalReconstructionTargetsForScopes,
 } from "@/lib/historical-reconstruction-db";
+import { HistoricalReconstructionIntegrityError } from "@/lib/historical-reconstruction-integrity";
 import { assertNoDirectIdentifiers, PrivacyTextError } from "@/lib/privacy-text";
 
 class MonthReconciliationInputError extends Error {}
@@ -136,9 +138,12 @@ export async function POST(
           where: {
             entityType: "ForecastEntry",
             entityId: { in: forecastIds },
-            action: "MATERIALIZED_REVIEWED_FORECAST",
+            action: { in: [
+              "MATERIALIZED_REVIEWED_FORECAST",
+              "CONFIRMED_REVIEWED_FORECAST_IN_HISTORICAL_RECONSTRUCTION",
+            ] },
           },
-          select: { entityId: true },
+          select: { entityId: true, action: true, beforeData: true, afterData: true },
         }),
         tx.user.findMany({
           where: { id: { in: Array.from(new Set(body.rows.map((row) => row.userId))) }, active: true },
@@ -164,15 +169,69 @@ export async function POST(
           "Deze maand bevat al concept- of ingediende planninguren. Rond die regels eerst afzonderlijk af.",
         );
       }
-      const priorDecisionIds = new Set(priorDecisions.map((audit) => audit.entityId));
-      if (priorDecisions.some((audit) => !existingByForecastId.has(audit.entityId))) {
+      const materializedDecisionIds = new Set(priorDecisions
+        .filter((audit) => audit.action === "MATERIALIZED_REVIEWED_FORECAST")
+        .map((audit) => audit.entityId));
+      const historicallyCoveredDecisionIds = new Set(priorDecisions
+        .filter((audit) => audit.action === "CONFIRMED_REVIEWED_FORECAST_IN_HISTORICAL_RECONSTRUCTION")
+        .map((audit) => audit.entityId));
+      if (Array.from(materializedDecisionIds).some((id) => !existingByForecastId.has(id))) {
         throw new MonthReconciliationConflictError("Een eerder verwerkte planregel mist zijn gekoppelde urenregistratie.");
       }
-      if (existingEntries.some((entry) => !entry.sourceForecastEntryId || !priorDecisionIds.has(entry.sourceForecastEntryId))) {
+      if (existingEntries.some((entry) => !entry.sourceForecastEntryId || !materializedDecisionIds.has(entry.sourceForecastEntryId))) {
         throw new MonthReconciliationConflictError("Een gekoppeld planninguur mist zijn verplichte forecastaudit.");
       }
+      const forecastById = new Map(forecasts.map((forecast) => [forecast.id, forecast]));
+      const previouslyCoveredCandidates = priorDecisions
+        .filter((audit) => audit.action === "CONFIRMED_REVIEWED_FORECAST_IN_HISTORICAL_RECONSTRUCTION")
+        .map((audit) => {
+          const forecast = forecastById.get(audit.entityId);
+          const beforeData = audit.beforeData;
+          const data = audit.afterData;
+          if (
+            !forecast ||
+            !beforeData || typeof beforeData !== "object" || Array.isArray(beforeData) ||
+            !data || typeof data !== "object" || Array.isArray(data)
+          ) {
+            throw new HistoricalReconstructionIntegrityError("Een eerdere historische forecastbevestiging is niet volledig herleidbaar.");
+          }
+          const before = beforeData as Record<string, unknown>;
+          const row = data as Record<string, unknown>;
+          if (
+            before.plannedDate !== forecast.plannedDate.toISOString().slice(0, 10) ||
+            before.plannedExecutorName !== forecast.executorName ||
+            before.plannedHours !== forecast.plannedHours ||
+            typeof row.userId !== "string" ||
+            (row.therapistId !== null && typeof row.therapistId !== "string") ||
+            row.workPackageId !== forecast.allocation.workPackageId ||
+            row.activityId !== forecast.allocation.activityId ||
+            row.plannedHours !== forecast.plannedHours
+          ) {
+            throw new HistoricalReconstructionIntegrityError("Een eerdere historische forecastbevestiging wijkt af van de actieve planning.");
+          }
+          return {
+            id: forecast.id,
+            userId: row.userId,
+            therapistId: row.therapistId as string | null,
+            workPackageId: forecast.allocation.workPackageId,
+            activityId: forecast.allocation.activityId,
+            date: forecast.plannedDate,
+            hours: forecast.plannedHours,
+          };
+        });
+      if (previouslyCoveredCandidates.length > 0) {
+        const revalidated = await partitionEntriesCoveredByHistoricalReconstruction(
+          tx,
+          previouslyCoveredCandidates,
+          { excludeForecastIds: previouslyCoveredCandidates.map((candidate) => candidate.id) },
+        );
+        if (revalidated.coveredIds.size !== previouslyCoveredCandidates.length) {
+          throw new HistoricalReconstructionIntegrityError("Een eerdere historische forecastbevestiging wordt niet meer door de reconstructie afgedekt.");
+        }
+      }
 
-      const openForecasts = forecasts.filter((forecast) => !existingByForecastId.has(forecast.id));
+      const openForecasts = forecasts.filter((forecast) =>
+        !existingByForecastId.has(forecast.id) && !historicallyCoveredDecisionIds.has(forecast.id));
       if (openForecasts.length === 0) {
         throw new MonthReconciliationConflictError("Alle planninguren van deze maand zijn al goedgekeurd.");
       }
@@ -200,13 +259,45 @@ export async function POST(
           therapistId: row.therapistId,
           workPackageId: forecast.allocation.workPackageId,
           activityId: forecast.allocation.activityId,
+          id: forecast.id,
           date: forecast.plannedDate,
+          hours: forecast.plannedHours,
         };
       });
-      await assertNoOrdinaryEntryOverlapsHistoricalReconstruction(tx, protectedEntries);
+      const historicalCoverage = await partitionEntriesCoveredByHistoricalReconstruction(tx, protectedEntries);
+      const historicallyCoveredForecasts = openForecasts.filter((forecast) => historicalCoverage.coveredIds.has(forecast.id));
+      const uncoveredForecasts = openForecasts.filter((forecast) => !historicalCoverage.coveredIds.has(forecast.id));
+      const uncoveredEntries = protectedEntries.filter((entry) => !historicalCoverage.coveredIds.has(entry.id));
+      await assertNoOrdinaryEntryOverlapsHistoricalReconstruction(tx, uncoveredEntries);
+      for (const forecast of historicallyCoveredForecasts) {
+        await tx.auditEvent.create({
+          data: {
+            entityType: "ForecastEntry",
+            entityId: forecast.id,
+            action: "CONFIRMED_REVIEWED_FORECAST_IN_HISTORICAL_RECONSTRUCTION",
+            reason: sourceReference,
+            beforeData: {
+              plannedDate: forecast.plannedDate.toISOString().slice(0, 10),
+              plannedExecutorName: forecast.executorName,
+              plannedHours: forecast.plannedHours,
+            },
+            afterData: {
+              performedConfirmation: true,
+              historicallyCovered: true,
+              status: "APPROVED",
+              userId: rowByForecastId.get(forecast.id)!.userId,
+              therapistId: rowByForecastId.get(forecast.id)!.therapistId,
+              workPackageId: forecast.allocation.workPackageId,
+              activityId: forecast.allocation.activityId,
+              plannedHours: forecast.plannedHours,
+            },
+            actorUserId: session.user.id,
+          },
+        });
+      }
       const approvedAt = new Date();
       let approvedHours = 0;
-      for (const forecast of openForecasts) {
+      for (const forecast of uncoveredForecasts) {
         const row = rowByForecastId.get(forecast.id)!;
         const dateKey = forecast.plannedDate.toISOString().slice(0, 10);
         if (dateKey > databaseToday) {
@@ -312,7 +403,7 @@ export async function POST(
         approvedHours += forecast.plannedHours;
       }
 
-      await validateHistoricalReconstructionTargetsForScopes(tx, protectedEntries);
+      await validateHistoricalReconstructionTargetsForScopes(tx, uncoveredEntries);
 
       const totalApprovedHours = Math.round((
         existingEntries.reduce((sum, entry) => sum + entry.hours, 0) + approvedHours
@@ -334,6 +425,7 @@ export async function POST(
             monthKey,
             approvedCount: forecasts.length,
             approvedHours: totalApprovedHours,
+            historicallyCoveredForecastHours: historicallyCoveredForecasts.reduce((sum, forecast) => sum + forecast.plannedHours, 0),
             performedConfirmation: true,
           },
           actorUserId: session.user.id,
@@ -344,7 +436,7 @@ export async function POST(
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    if (error instanceof MonthReconciliationConflictError ||
+    if (error instanceof MonthReconciliationConflictError || error instanceof HistoricalReconstructionIntegrityError ||
       (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2034"))) {
       return NextResponse.json({ error: error instanceof Error ? error.message : "De maand is gelijktijdig gewijzigd." }, { status: 409 });
     }

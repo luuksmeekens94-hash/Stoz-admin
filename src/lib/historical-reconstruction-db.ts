@@ -139,6 +139,12 @@ export interface HistoricalReconstructionScopeKey {
   activityId: string;
 }
 
+export interface HistoricalCoverageCandidate extends HistoricalReconstructionScopeKey {
+  id: string;
+  date: Date;
+  hours: number;
+}
+
 export function validateHistoricalReconstructionScopeTargets(
   targets: Array<{ registeredHours: number; confirmedTargetHours: number }>,
 ) {
@@ -203,6 +209,94 @@ async function loadHistoricalReconstructionEntriesForScopes(
   });
   const reconstructionIds = new Set(audits.map((audit) => audit.entityId));
   return entries.filter((entry) => reconstructionIds.has(entry.id));
+}
+
+export async function partitionEntriesCoveredByHistoricalReconstruction(
+  tx: Prisma.TransactionClient,
+  candidates: HistoricalCoverageCandidate[],
+  options: { excludeForecastIds?: string[] } = {},
+) {
+  const reconstructionEntries = await loadHistoricalReconstructionEntriesForScopes(tx, candidates);
+  const coverageByScope = new Map<string, { asOf: string; registeredHours: number }>();
+  for (const reconstructionEntry of reconstructionEntries) {
+    const reconstruction = await loadAndValidateHistoricalReconstruction(tx, reconstructionEntry);
+    if (!reconstruction) continue;
+    const matchingCandidates = candidates.filter(
+      (candidate) => scopeIdentity(candidate) === scopeIdentity(reconstructionEntry) &&
+        candidate.date.toISOString().slice(0, 10) <= reconstruction.provenance.asOf,
+    );
+    if (matchingCandidates.length === 0) continue;
+    if (reconstructionEntry.status !== "APPROVED") {
+      throw new HistoricalReconstructionIntegrityError(
+        "De overlappende historische reconstructie is nog niet goedgekeurd.",
+      );
+    }
+    const identity = scopeIdentity(reconstructionEntry);
+    const current = coverageByScope.get(identity);
+    if (!current || reconstruction.provenance.asOf > current.asOf) {
+      coverageByScope.set(identity, {
+        asOf: reconstruction.provenance.asOf,
+        registeredHours: reconstruction.registeredHours,
+      });
+    } else if (reconstruction.registeredHours > current.registeredHours) {
+      current.registeredHours = reconstruction.registeredHours;
+    }
+  }
+
+  const coveredIds = new Set<string>();
+  const coveredHoursByScope = new Map<string, number>();
+  for (const candidate of candidates) {
+    const identity = scopeIdentity(candidate);
+    const coverage = coverageByScope.get(identity);
+    if (!coverage || candidate.date.toISOString().slice(0, 10) > coverage.asOf) continue;
+    coveredIds.add(candidate.id);
+    coveredHoursByScope.set(identity, (coveredHoursByScope.get(identity) || 0) + candidate.hours);
+  }
+  const excludedIds = new Set(options.excludeForecastIds || []);
+  const priorCoverageAudits = await tx.auditEvent.findMany({
+    where: {
+      entityType: "ForecastEntry",
+      action: "CONFIRMED_REVIEWED_FORECAST_IN_HISTORICAL_RECONSTRUCTION",
+    },
+    select: { entityId: true, afterData: true },
+  });
+  const consumedHoursByScope = new Map<string, number>();
+  for (const audit of priorCoverageAudits) {
+    if (excludedIds.has(audit.entityId)) continue;
+    const data = audit.afterData;
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new HistoricalReconstructionIntegrityError("Een historische forecastbevestiging heeft geen geldige auditdata.");
+    }
+    const row = data as Record<string, unknown>;
+    if (
+      typeof row.userId !== "string" ||
+      (row.therapistId !== null && typeof row.therapistId !== "string") ||
+      typeof row.workPackageId !== "string" ||
+      typeof row.activityId !== "string" ||
+      typeof row.plannedHours !== "number" ||
+      !Number.isFinite(row.plannedHours) ||
+      row.plannedHours <= 0
+    ) {
+      throw new HistoricalReconstructionIntegrityError("Een historische forecastbevestiging bevat onvolledige scopedata.");
+    }
+    const identity = scopeIdentity({
+      userId: row.userId,
+      therapistId: row.therapistId as string | null,
+      workPackageId: row.workPackageId,
+      activityId: row.activityId,
+    });
+    consumedHoursByScope.set(identity, (consumedHoursByScope.get(identity) || 0) + row.plannedHours);
+  }
+  for (const [identity, coveredHours] of Array.from(coveredHoursByScope.entries())) {
+    const coverage = coverageByScope.get(identity)!;
+    const consumedHours = consumedHoursByScope.get(identity) || 0;
+    if (consumedHours + coveredHours > coverage.registeredHours + 0.0001) {
+      throw new HistoricalReconstructionIntegrityError(
+        "De bevestigde forecasturen zijn samen hoger dan de auditbaar gereconstrueerde uren in dezelfde scope.",
+      );
+    }
+  }
+  return { coveredIds };
 }
 
 export async function assertNoOrdinaryEntryOverlapsHistoricalReconstruction(

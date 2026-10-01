@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   dbDate: vi.fn(),
   assertNoOverlap: vi.fn(),
   validateTargets: vi.fn(),
+  partitionHistoricalCoverage: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: mocks.getSession }));
@@ -23,6 +24,7 @@ vi.mock("@/lib/hour-entry-db", () => ({ databaseAmsterdamDateKey: mocks.dbDate }
 vi.mock("@/lib/historical-reconstruction-db", () => ({
   assertNoOrdinaryEntryOverlapsHistoricalReconstruction: mocks.assertNoOverlap,
   validateHistoricalReconstructionTargetsForScopes: mocks.validateTargets,
+  partitionEntriesCoveredByHistoricalReconstruction: mocks.partitionHistoricalCoverage,
 }));
 
 import { POST } from "@/app/api/hours/planning/months/[monthKey]/reconcile/route";
@@ -81,6 +83,7 @@ describe("planning month reconciliation route", () => {
     mocks.createAudit.mockResolvedValue({ id: "audit-1" });
     mocks.assertNoOverlap.mockResolvedValue(undefined);
     mocks.validateTargets.mockResolvedValue(undefined);
+    mocks.partitionHistoricalCoverage.mockResolvedValue({ coveredIds: new Set<string>() });
   });
 
   it("registreert en keurt alle openstaande maandregels transactioneel goed met audittrail", async () => {
@@ -154,7 +157,7 @@ describe("planning month reconciliation route", () => {
     mocks.findExisting.mockResolvedValueOnce([
       { id: "hour-existing", sourceForecastEntryId: "forecast-1", status: "APPROVED", hours: 2.5 },
     ]);
-    mocks.findPriorDecisions.mockResolvedValueOnce([{ entityId: "forecast-1" }]);
+    mocks.findPriorDecisions.mockResolvedValueOnce([{ entityId: "forecast-1", action: "MATERIALIZED_REVIEWED_FORECAST" }]);
 
     const response = await post({
       ...body,
@@ -178,6 +181,21 @@ describe("planning month reconciliation route", () => {
     expect(mocks.createAudit).toHaveBeenCalledWith({ data: expect.objectContaining({
       action: "MATERIALIZED_REVIEWED_FORECAST",
       reason: expect.stringMatching(/maandcontrole 2026-08.*2026-10-01/i),
+    }) });
+  });
+
+  it("bevestigt uren die al auditbaar in de historische reconstructie zitten zonder ze dubbel te boeken", async () => {
+    mocks.partitionHistoricalCoverage.mockResolvedValueOnce({ coveredIds: new Set(["forecast-1"]) });
+
+    const response = await post();
+
+    expect(response.status).toBe(201);
+    expect(mocks.createEntry).not.toHaveBeenCalled();
+    expect(mocks.createAudit).toHaveBeenCalledWith({ data: expect.objectContaining({
+      entityType: "ForecastEntry",
+      entityId: "forecast-1",
+      action: "CONFIRMED_REVIEWED_FORECAST_IN_HISTORICAL_RECONSTRUCTION",
+      afterData: expect.objectContaining({ performedConfirmation: true, historicallyCovered: true }),
     }) });
   });
 });

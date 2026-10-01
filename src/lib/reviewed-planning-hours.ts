@@ -3,6 +3,7 @@ import type { ReviewedPlanningHourRow } from "@/components/ReviewedPlanningHours
 
 interface ReviewedPlanningHoursClient {
   forecastEntry: Pick<typeof prisma.forecastEntry, "findMany">;
+  auditEvent: Pick<typeof prisma.auditEvent, "findMany">;
 }
 
 export async function loadReviewedPlanningHours(
@@ -32,8 +33,18 @@ export async function loadReviewedPlanningHours(
       },
     },
   });
+  if (rows.length === 0) return [];
+  const historicalCoverageAudits = await client.auditEvent.findMany({
+    where: {
+      entityType: "ForecastEntry",
+      entityId: { in: rows.map((row) => row.id) },
+      action: "CONFIRMED_REVIEWED_FORECAST_IN_HISTORICAL_RECONSTRUCTION",
+    },
+    select: { entityId: true },
+  });
+  const historicallyCoveredIds = new Set(historicalCoverageAudits.map((audit) => audit.entityId));
 
-  return rows.map((row) => ({
+  return rows.filter((row) => !historicallyCoveredIds.has(row.id)).map((row) => ({
     id: row.id,
     plannedDate: row.plannedDate.toISOString().slice(0, 10),
     executorName: row.executorName,
