@@ -6,7 +6,10 @@ import PlanningVersionActions from "@/components/PlanningVersionActions";
 import MonthlyPlanningApprovalBoard, {
   type MonthlyPlanningApprovalMonth,
 } from "@/components/MonthlyPlanningApprovalBoard";
+import PastPlanningReconciliation from "@/components/PastPlanningReconciliation";
 import { getSession } from "@/lib/auth";
+import { loadPlannedHourActors } from "@/lib/planned-hour-prefill";
+import { loadReviewedPlanningHours } from "@/lib/reviewed-planning-hours";
 import {
   buildCorrectiveMonthlyPlan,
   comparePlanActual,
@@ -37,8 +40,9 @@ export default async function HoursPlanningPage() {
   const asOfKey = new Date().toISOString().slice(0, 10);
   const asOfEnd = new Date(`${asOfKey}T23:59:59.999Z`);
   const asOfLabel = asOfEnd.toLocaleDateString("nl-NL", { timeZone: "UTC" });
+  const currentMonth = asOfKey.slice(0, 7);
 
-  const [latestVersion, versionCount, approvedEntries, budgetAllocations] = await Promise.all([
+  const [latestVersion, versionCount, approvedEntries, budgetAllocations, reviewedPlanningHours, plannedHourActors] = await Promise.all([
     prisma.planningVersion.findFirst({
       orderBy: { revision: "desc" },
       include: {
@@ -74,6 +78,8 @@ export default async function HoursPlanningPage() {
       where: { userId: { not: null } },
       select: { userId: true, category: true },
     }),
+    loadReviewedPlanningHours(),
+    loadPlannedHourActors(),
   ]);
   const hasFutureRebalance = latestVersion
     ? Boolean(await prisma.auditEvent.findFirst({
@@ -135,7 +141,18 @@ export default async function HoursPlanningPage() {
   ).sort();
 
   const totalForecastHours = rows.reduce((sum, row) => sum + row.plannedHours, 0);
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const pastPlanningRows = reviewedPlanningHours
+    .filter((row) => row.plannedDate.slice(0, 7) < currentMonth)
+    .map((row) => {
+      const matches = plannedHourActors.filter(
+        (actor) => actor.name.trim().toLocaleLowerCase("nl-NL") === row.executorName.trim().toLocaleLowerCase("nl-NL"),
+      );
+      return {
+        ...row,
+        monthKey: row.plannedDate.slice(0, 7),
+        suggestedActorKey: matches.length === 1 ? matches[0].key : "",
+      };
+    });
   const correctiveActions = buildCorrectiveActionPlan();
   const approvalMonths: MonthlyPlanningApprovalMonth[] = [];
   if (latestVersion) {
@@ -217,6 +234,8 @@ export default async function HoursPlanningPage() {
           <p className="mt-1 text-xs text-gray-500">{versionCount} versie(s) append-only bewaard</p>
         </div>
       </section>
+
+      <PastPlanningReconciliation rows={pastPlanningRows} actors={plannedHourActors} />
 
       {latestVersion && approvalMonths.length > 0 && (
         <MonthlyPlanningApprovalBoard months={approvalMonths} />
