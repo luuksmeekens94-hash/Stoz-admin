@@ -31,7 +31,6 @@ export default function PastPlanningReconciliation({
   const [actorKeys, setActorKeys] = useState<Record<string, string>>(
     Object.fromEntries(rows.map((row) => [row.id, row.suggestedActorKey])),
   );
-  const [sources, setSources] = useState<Record<string, string>>({});
   const [confirmations, setConfirmations] = useState<Record<string, boolean>>({});
   const [savingMonth, setSavingMonth] = useState("");
   const [error, setError] = useState("");
@@ -41,12 +40,10 @@ export default function PastPlanningReconciliation({
   if (months.length === 0) return null;
 
   async function reconcileMonth(monthKey: string, monthLabel: string, monthRows: PastPlanningRow[]) {
-    const sourceReference = (sources[monthKey] || "").trim();
     const selectedActors = monthRows.map((row) => actors.find((actor) => actor.key === actorKeys[row.id]));
     const missingActorCount = selectedActors.filter((actor) => !actor).length;
     const missing: string[] = [];
     if (missingActorCount > 0) missing.push(`Kies voor ${missingActorCount} regel${missingActorCount === 1 ? "" : "s"} de werkelijke uitvoerder.`);
-    if (sourceReference.length < 20) missing.push("Vul een bron of onderbouwing van minimaal 20 tekens in.");
     if (!confirmations[monthKey]) missing.push("Vink de bevestiging aan dat de werkzaamheden echt zijn uitgevoerd.");
     if (missing.length > 0) {
       setError(missing.join(" "));
@@ -63,7 +60,6 @@ export default function PastPlanningReconciliation({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sourceReference,
           performedConfirmation: true,
           rows: monthRows.map((row, index) => ({
             forecastEntryId: row.id,
@@ -144,19 +140,6 @@ export default function PastPlanningReconciliation({
               </div>
 
               <div className="space-y-3 border-t border-amber-100 bg-gray-50 p-4">
-                <div>
-                  <label htmlFor={`source-${monthKey}`} className="label">Bron of onderbouwing {monthLabel}</label>
-                  <textarea
-                    id={`source-${monthKey}`}
-                    className="input"
-                    rows={2}
-                    minLength={20}
-                    maxLength={2000}
-                    placeholder="Bijv. agenda, overlegnotities en opgeleverde documenten van deze maand"
-                    value={sources[monthKey] || ""}
-                    onChange={(event) => setSources((current) => ({ ...current, [monthKey]: event.target.value }))}
-                  />
-                </div>
                 <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-white p-3 text-sm text-amber-950">
                   <input
                     type="checkbox"

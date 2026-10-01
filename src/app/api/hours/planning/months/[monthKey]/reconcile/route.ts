@@ -31,7 +31,7 @@ function monthRange(monthKey: string) {
 }
 
 function parseBody(value: unknown): {
-  sourceReference: string;
+  sourceReference: string | null;
   performedConfirmation: true;
   rows: ReconciliationRow[];
 } {
@@ -42,8 +42,10 @@ function parseBody(value: unknown): {
   if (Object.keys(input).some((key) => !["sourceReference", "performedConfirmation", "rows"].includes(key))) {
     throw new MonthReconciliationInputError("Het verzoek bevat een onbekend veld.");
   }
-  const sourceReference = typeof input.sourceReference === "string" ? input.sourceReference.trim() : "";
-  if (sourceReference.length < 20 || sourceReference.length > 2000) {
+  const sourceReference = typeof input.sourceReference === "string" && input.sourceReference.trim()
+    ? input.sourceReference.trim()
+    : null;
+  if (sourceReference && (sourceReference.length < 20 || sourceReference.length > 2000)) {
     throw new MonthReconciliationInputError("Geef een bron of onderbouwing van 20 tot 2000 tekens.");
   }
   if (input.performedConfirmation !== true) {
@@ -90,7 +92,7 @@ export async function POST(
     let raw: unknown;
     try { raw = await request.json(); } catch { throw new MonthReconciliationInputError("Het verzoek bevat geen geldige JSON."); }
     const body = parseBody(raw);
-    assertNoDirectIdentifiers(body.sourceReference, "brononderbouwing");
+    if (body.sourceReference) assertNoDirectIdentifiers(body.sourceReference, "brononderbouwing");
     const { monthKey } = await params;
     const range = monthRange(monthKey);
 
@@ -154,6 +156,8 @@ export async function POST(
       if (monthKey >= databaseToday.slice(0, 7)) {
         throw new MonthReconciliationInputError("Alleen volledig afgesloten maanden kunnen in één keer worden goedgekeurd.");
       }
+      const sourceReference = body.sourceReference ||
+        `Maandcontrole ${monthKey} door beheerder ${session.user.id} op ${databaseToday}: uitvoering per planregel expliciet bevestigd.`;
       const existingByForecastId = new Map(existingEntries.map((entry) => [entry.sourceForecastEntryId, entry]));
       if (existingEntries.some((entry) => entry.status !== "APPROVED")) {
         throw new MonthReconciliationConflictError(
@@ -243,7 +247,7 @@ export async function POST(
             entityType: "HourEntry",
             entityId: entry.id,
             action: "MATERIALIZED_REVIEWED_FORECAST",
-            reason: body.sourceReference,
+            reason: sourceReference,
             beforeData: sourceSnapshot,
             afterData: {
               actualDate: dateKey,
@@ -252,7 +256,7 @@ export async function POST(
               therapistId: row.therapistId,
               description,
               status: "DRAFT",
-              sourceReference: body.sourceReference,
+              sourceReference,
               performedConfirmation: true,
             },
             actorUserId: session.user.id,
@@ -271,8 +275,8 @@ export async function POST(
             entityId: entry.id,
             action: "SUBMITTED_REVIEWED_FORECAST_HOUR",
             reason: "Maandgewijs ingediend na controle van planning, bron en feitelijke uitvoering.",
-            beforeData: { status: "DRAFT", sourceReference: body.sourceReference, performedConfirmation: true },
-            afterData: { status: "SUBMITTED", sourceReference: body.sourceReference, performedConfirmation: true },
+            beforeData: { status: "DRAFT", sourceReference, performedConfirmation: true },
+            afterData: { status: "SUBMITTED", sourceReference, performedConfirmation: true },
             actorUserId: session.user.id,
           },
         });
@@ -289,8 +293,8 @@ export async function POST(
             entityId: entry.id,
             action: "APPROVED_REVIEWED_FORECAST_HOUR",
             reason: "Maandgewijs goedgekeurd na expliciete beoordeling van bron en werkelijke uitvoering.",
-            beforeData: { status: "SUBMITTED", sourceReference: body.sourceReference, performedConfirmation: true },
-            afterData: { status: "APPROVED", sourceReference: body.sourceReference, performedConfirmation: true },
+            beforeData: { status: "SUBMITTED", sourceReference, performedConfirmation: true },
+            afterData: { status: "APPROVED", sourceReference, performedConfirmation: true },
             actorUserId: session.user.id,
           },
         });
@@ -299,7 +303,7 @@ export async function POST(
             entityType: "ForecastEntry",
             entityId: forecast.id,
             action: "MATERIALIZED_REVIEWED_FORECAST",
-            reason: body.sourceReference,
+            reason: sourceReference,
             beforeData: { materializedHourEntryId: null },
             afterData: { materializedHourEntryId: entry.id, performedConfirmation: true, status: "APPROVED" },
             actorUserId: session.user.id,
@@ -319,7 +323,7 @@ export async function POST(
           entityType: "PlanningMonth",
           entityId: `${forecasts[0].allocation.planningVersion.id}:${monthKey}:actuals`,
           action: "APPROVED_MONTHLY_FORECAST_AS_ACTUALS",
-          reason: body.sourceReference,
+          reason: sourceReference,
           beforeData: {
             monthKey,
             alreadyApprovedCount: existingEntries.length,

@@ -168,4 +168,16 @@ describe("planning month reconciliation route", () => {
       afterData: expect.objectContaining({ approvedCount: 2, approvedHours: 4.5 }),
     }) });
   });
+
+  it("maakt zelf een auditbare maandbevestiging wanneer geen losse bron wordt ingevuld", async () => {
+    const { sourceReference: _sourceReference, ...withoutSource } = body;
+
+    const response = await post(withoutSource);
+
+    expect(response.status).toBe(201);
+    expect(mocks.createAudit).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: "MATERIALIZED_REVIEWED_FORECAST",
+      reason: expect.stringMatching(/maandcontrole 2026-08.*2026-10-01/i),
+    }) });
+  });
 });

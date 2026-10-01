@@ -59,9 +59,6 @@ describe("PastPlanningReconciliation", () => {
     fireEvent.change(screen.getByLabelText(/werkelijke uitvoerder.*front- en backoffice/i), {
       target: { value: "user:backoffice" },
     });
-    fireEvent.change(screen.getByLabelText(/bron of onderbouwing augustus 2026/i), {
-      target: { value: "Agenda en opgeleverde projectnotities voor augustus 2026 gecontroleerd." },
-    });
     fireEvent.click(screen.getByLabelText(/alle geselecteerde werkzaamheden.*daadwerkelijk uitgevoerd/i));
     fireEvent.click(screen.getByRole("button", { name: /augustus 2026 registreren en goedkeuren/i }));
 
@@ -70,7 +67,6 @@ describe("PastPlanningReconciliation", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          sourceReference: "Agenda en opgeleverde projectnotities voor augustus 2026 gecontroleerd.",
           performedConfirmation: true,
           rows: [
             { forecastEntryId: "forecast-1", userId: "luuk", therapistId: null },
@@ -90,7 +86,6 @@ describe("PastPlanningReconciliation", () => {
     fireEvent.click(button);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/kies voor 1 regel de werkelijke uitvoerder/i);
-    expect(screen.getByRole("alert")).toHaveTextContent(/vul een bron of onderbouwing/i);
     expect(screen.getByRole("alert")).toHaveTextContent(/vink de bevestiging aan/i);
     expect(fetch).not.toHaveBeenCalled();
   });
