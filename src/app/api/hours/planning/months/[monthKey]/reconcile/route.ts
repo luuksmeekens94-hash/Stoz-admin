@@ -12,6 +12,8 @@ import {
 import { HistoricalReconstructionIntegrityError } from "@/lib/historical-reconstruction-integrity";
 import { assertNoDirectIdentifiers, PrivacyTextError } from "@/lib/privacy-text";
 
+export const maxDuration = 60;
+
 class MonthReconciliationInputError extends Error {}
 class MonthReconciliationConflictError extends Error {}
 
@@ -432,7 +434,11 @@ export async function POST(
         },
       });
       return { monthKey, approvedCount: openForecasts.length, approvedHours: Math.round(approvedHours * 100) / 100 };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10_000,
+      timeout: 45_000,
+    });
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

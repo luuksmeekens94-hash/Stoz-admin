@@ -122,6 +122,14 @@ describe("planning month reconciliation route", () => {
     }) });
     expect(mocks.assertNoOverlap).toHaveBeenCalledOnce();
     expect(mocks.validateTargets).toHaveBeenCalledOnce();
+    expect(mocks.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        isolationLevel: "Serializable",
+        maxWait: 10_000,
+        timeout: 45_000,
+      }),
+    );
   });
 
   it("weigert gedeeltelijke maanden, toekomstige regels en ontbrekende bevestiging fail-closed", async () => {
